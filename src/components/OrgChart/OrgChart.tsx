@@ -33,6 +33,14 @@ const MAX_W_SC = 4000;
 const CULL_MARGIN = 120;
 const SPINE_R = 430; // Management ring sits on the sector ring (r=430)
 
+// ── Orbital intro animation ──────────────────────────────────────────────────
+const ORB_DIR_R  = 92;   // orbit clearance around director card (card r=78)
+const GM_ORB_R   = 38;   // orbit radius around each GM node
+const SEC_ORB_R  = 50;   // orbit radius around each sector node
+const ORB_BLUE   = '#5B9DD4';  // medium blue — line color
+const ORB_TIP    = '#A8D4F0';  // light sky blue — alive flowing tip
+const ORB_NAVY   = '#081336';  // deep navy — depth layer
+
 export default function OrgChart({ positions, connections, allNodes, levelNames, levelColors }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -398,6 +406,209 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     });
   }
 
+  // ── Orbital intro + permanent alive animation ─────────────────────────────
+  // Path: 360° director → radial to GM ring → 360° GM ring (all GMs) → stem → 360° sector ring
+  function renderOrbitalAnimation() {
+    if (!overviewGMs.length) return null;
+
+    const f   = (n: number) => n.toFixed(2);
+    const PI2 = 2 * Math.PI;
+
+    // CW arc on circle radius r (centred at origin), from angle a1 to a2
+    function cwArc(r: number, a1: number, a2: number): string {
+      const dA   = ((a2 - a1) % PI2 + PI2) % PI2;
+      const large = dA > Math.PI ? 1 : 0;
+      return `A ${r},${r} 0 ${large},1 ${f(r * Math.cos(a2))},${f(r * Math.sin(a2))}`;
+    }
+
+    // Full CW 360° on circle of radius r, starting at angle startA (4 quarter-arcs)
+    function ring360(r: number, startA: number): string[] {
+      const a = startA;
+      return [
+        cwArc(r, a,             a + Math.PI / 2),
+        cwArc(r, a + Math.PI / 2,   a + Math.PI),
+        cwArc(r, a + Math.PI,       a + Math.PI * 1.5),
+        cwArc(r, a + Math.PI * 1.5, a + Math.PI * 2),
+      ];
+    }
+
+    // Pick the first GM sorted CW from top (−π/2)
+    const topAngle    = -Math.PI / 2;
+    const normAngle   = (n: { x: number; y: number }) =>
+      ((Math.atan2(n.y, n.x) - topAngle + PI2 * 2) % PI2);
+    const firstGM     = [...overviewGMs].sort((a, b) => normAngle(a) - normAngle(b))[0];
+    const gmAngle     = Math.atan2(firstGM.y, firstGM.x);
+
+    const DR    = ORB_DIR_R;   // orbit radius around director card
+    const GM_R  = 190;         // GM ring radius
+    const SEC_R = 430;         // sector ring radius
+
+    const parts: string[] = [];
+
+    // ── 1. Full 360° orbit of director card ──
+    parts.push(`M 0,${-DR}`);
+    parts.push(...ring360(DR, topAngle));
+
+    // ── 2. Arc along director orbit from top to first GM's radial direction ──
+    const dToGM = ((gmAngle - topAngle) % PI2 + PI2) % PI2;
+    if (dToGM > 0.05) parts.push(cwArc(DR, topAngle, gmAngle));
+
+    // ── 3. Radial line: director orbit → first GM position (connection line) ──
+    parts.push(`L ${f(firstGM.x)},${f(firstGM.y)}`);
+
+    // ── 4. Full 360° around GM ring — sweeps through ALL GM nodes ──
+    parts.push(...ring360(GM_R, gmAngle));
+
+    // ── 5. Radial stem outward to sector ring ──
+    parts.push(`L ${f(SEC_R * Math.cos(gmAngle))},${f(SEC_R * Math.sin(gmAngle))}`);
+
+    // ── 6. Full 360° around sector ring — sweeps through ALL sector nodes ──
+    parts.push(...ring360(SEC_R, gmAngle));
+
+    const dynPath = parts.join(' ');
+
+    // Path length: dir(578) + small arc + connector(~98) + GM ring(1194) + stem(240) + sec ring(2702)
+    const dirLen  = PI2 * DR;
+    const arcLen  = dToGM * DR;
+    const connLen = GM_R - DR;
+    const gmLen   = PI2 * GM_R;
+    const stemLen = SEC_R - GM_R;
+    const secLen  = PI2 * SEC_R;
+    const TOTAL   = Math.round(dirLen + arcLen + connLen + gmLen + stemLen + secLen);
+
+    const DRAW = '15s';
+
+    return (
+      <g pointerEvents="none">
+
+        {/* ── DRAW: navy depth layer ── */}
+        <path d={dynPath} fill="none" stroke={ORB_NAVY} strokeWidth={5}
+          strokeLinecap="round" strokeDasharray={`0 ${TOTAL}`} opacity={0.9}>
+          {/* @ts-ignore — SMIL */}
+          <animate attributeName="stroke-dasharray"
+            values={`0 ${TOTAL};${TOTAL} 0`}
+            dur={DRAW} fill="freeze" repeatCount="1" />
+        </path>
+
+        {/* ── DRAW: outer blue glow ── */}
+        <path d={dynPath} fill="none" stroke={ORB_BLUE} strokeWidth={6}
+          filter="url(#orb-glow)" strokeLinecap="round"
+          strokeDasharray={`0 ${TOTAL}`} opacity={0.18}>
+          {/* @ts-ignore */}
+          <animate attributeName="stroke-dasharray"
+            values={`0 ${TOTAL};${TOTAL} 0`}
+            dur={DRAW} fill="freeze" repeatCount="1" />
+        </path>
+
+        {/* ── DRAW: sharp blue core line ── */}
+        <path d={dynPath} fill="none" stroke={ORB_BLUE} strokeWidth={2}
+          strokeLinecap="round" strokeDasharray={`0 ${TOTAL}`} opacity={0.92}>
+          {/* @ts-ignore */}
+          <animate attributeName="stroke-dasharray"
+            values={`0 ${TOTAL};${TOTAL} 0`}
+            dur={DRAW} fill="freeze" repeatCount="1" />
+        </path>
+
+        {/* ── DRAW: leading orange tip ── */}
+        <circle r={5} fill={ORB_TIP} filter="url(#orb-tip-glow)">
+          {/* @ts-ignore */}
+          <animateMotion path={dynPath} dur={DRAW} fill="freeze"
+            repeatCount="1" calcMode="linear" />
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="1;1;0" keyTimes="0;0.96;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+        </circle>
+
+        {/* ── ALIVE: pulsing blue glow (begins after draw) ── */}
+        <g opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0.14;0.32;0.14" dur="2.8s"
+            repeatCount="indefinite" begin={DRAW} />
+          <path d={dynPath} fill="none" stroke={ORB_BLUE} strokeWidth={6}
+            filter="url(#orb-glow)" strokeLinecap="round"
+            strokeDasharray={`${TOTAL} 0`} />
+        </g>
+
+        {/* ── ALIVE: static navy base ── */}
+        <path d={dynPath} fill="none" stroke={ORB_NAVY} strokeWidth={4}
+          strokeLinecap="round" strokeDasharray={`${TOTAL} 0`} opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0;0;0.85" keyTimes="0;0.999;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+        </path>
+
+        {/* ── ALIVE: static blue line ── */}
+        <path d={dynPath} fill="none" stroke={ORB_BLUE} strokeWidth={1.8}
+          strokeLinecap="round" strokeDasharray={`${TOTAL} 0`} opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0;0;0.5" keyTimes="0;0.999;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+        </path>
+
+        {/* ── ALIVE: flowing orange tip segment ── */}
+        <path d={dynPath} fill="none" stroke={ORB_TIP} strokeWidth={3}
+          strokeLinecap="round" filter="url(#orb-tip-glow)"
+          strokeDasharray={`70 ${TOTAL - 70}`} strokeDashoffset={0} opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0;0;0.75" keyTimes="0;0.999;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+          {/* @ts-ignore */}
+          <animate attributeName="stroke-dashoffset"
+            from="0" to={`${-TOTAL}`}
+            dur="10s" repeatCount="indefinite" />
+        </path>
+
+        {/* ── ALIVE: blue trailing segment (forward) ── */}
+        <path d={dynPath} fill="none" stroke={ORB_BLUE} strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeDasharray={`35 ${TOTAL - 35}`} strokeDashoffset={-50} opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0;0;0.45" keyTimes="0;0.999;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+          {/* @ts-ignore */}
+          <animate attributeName="stroke-dashoffset"
+            from="-50" to={`${-TOTAL - 50}`}
+            dur="10s" repeatCount="indefinite" />
+        </path>
+
+        {/* ── ALIVE: reverse flowing tip (opposite direction) ── */}
+        <path d={dynPath} fill="none" stroke={ORB_TIP} strokeWidth={3}
+          strokeLinecap="round" filter="url(#orb-tip-glow)"
+          strokeDasharray={`70 ${TOTAL - 70}`} strokeDashoffset={0} opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0;0;0.75" keyTimes="0;0.999;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+          {/* @ts-ignore */}
+          <animate attributeName="stroke-dashoffset"
+            from="0" to={`${TOTAL}`}
+            dur="10s" repeatCount="indefinite" />
+        </path>
+
+        {/* ── ALIVE: reverse blue trailing segment ── */}
+        <path d={dynPath} fill="none" stroke={ORB_BLUE} strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeDasharray={`35 ${TOTAL - 35}`} strokeDashoffset={50} opacity={0}>
+          {/* @ts-ignore */}
+          <animate attributeName="opacity"
+            values="0;0;0.45" keyTimes="0;0.999;1"
+            dur={DRAW} fill="freeze" repeatCount="1" />
+          {/* @ts-ignore */}
+          <animate attributeName="stroke-dashoffset"
+            from="50" to={`${TOTAL + 50}`}
+            dur="10s" repeatCount="indefinite" />
+        </path>
+
+      </g>
+    );
+  }
+
   // ── Arc-spine connections (all GGs → sector ring → all sectors) ─────────
   function renderArcSpines() {
     const gmColor = levelColors[1];
@@ -521,83 +732,6 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
 
   useEffect(() => { setMounted(true); }, []);
 
-  // ── Beam intro animation (overview only, plays once on mount) ─────────
-  function renderBeamAnimation() {
-    return (
-      <g pointerEvents="none">
-        {/* Fade out the entire beam after 9 s */}
-        <animate
-          attributeName="opacity"
-          values="1;1;0"
-          keyTimes="0;0.84;1"
-          dur="9s"
-          fill="freeze"
-          repeatCount="1"
-        />
-
-        {/* Rotating beam, clipped to the expanding ring boundary */}
-        <g clipPath="url(#beam-reveal-clip)">
-          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-          {/* @ts-ignore — SMIL animateTransform */}
-          <animateTransform
-            attributeName="transform"
-            type="rotate"
-            from="0 0 0"
-            to="360 0 0"
-            dur="1.6s"
-            repeatCount="indefinite"
-          />
-          {/* Wide halo glow */}
-          <rect x={0} y={-22} width={485} height={44}
-            fill="url(#beam-sweep-grad)" opacity={0.28} filter="url(#beam-glow-filter)" />
-          {/* Medium glow */}
-          <rect x={0} y={-8} width={485} height={16}
-            fill="url(#beam-sweep-grad)" opacity={0.52} filter="url(#beam-glow-filter)" />
-          {/* Sharp core */}
-          <rect x={0} y={-1.5} width={485} height={3}
-            fill="url(#beam-sweep-grad)" />
-          {/* Bright tip */}
-          <circle cx={483} cy={0} r={3.5} fill="#ffffff" opacity={0.9} />
-        </g>
-
-        {/* Ring-pulse when beam reaches director ring */}
-        <circle cx={0} cy={0} r={90} fill="none" stroke="#C2410C" strokeWidth={2.5} opacity={0}>
-          <animate attributeName="opacity"
-            values="0;0;0.65;0;0"
-            keyTimes="0;0.06;0.12;0.27;1"
-            dur="9s" fill="freeze" repeatCount="1" />
-          <animate attributeName="r"
-            values="90;90;105;90;90"
-            keyTimes="0;0.06;0.15;0.27;1"
-            dur="9s" fill="freeze" repeatCount="1" />
-        </circle>
-
-        {/* Ring-pulse when beam reaches GM ring */}
-        <circle cx={0} cy={0} r={190} fill="none" stroke="#C2410C" strokeWidth={2} opacity={0}>
-          <animate attributeName="opacity"
-            values="0;0;0.55;0;0"
-            keyTimes="0;0.37;0.43;0.58;1"
-            dur="9s" fill="freeze" repeatCount="1" />
-          <animate attributeName="r"
-            values="190;190;208;190;190"
-            keyTimes="0;0.37;0.46;0.58;1"
-            dur="9s" fill="freeze" repeatCount="1" />
-        </circle>
-
-        {/* Ring-pulse when beam reaches sector ring */}
-        <circle cx={0} cy={0} r={430} fill="none" stroke="#C2410C" strokeWidth={2} opacity={0}>
-          <animate attributeName="opacity"
-            values="0;0;0.5;0;0"
-            keyTimes="0;0.70;0.76;0.86;1"
-            dur="9s" fill="freeze" repeatCount="1" />
-          <animate attributeName="r"
-            values="430;430;452;430;430"
-            keyTimes="0;0.70;0.78;0.86;1"
-            dur="9s" fill="freeze" repeatCount="1" />
-        </circle>
-      </g>
-    );
-  }
 
   if (!mounted) {
     return (
@@ -729,31 +863,16 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
             <stop offset="100%" style={{ stopColor: 'var(--bg-deep)' }} />
           </radialGradient>
 
-          {/* ── Beam intro animation defs ── */}
-          <clipPath id="beam-reveal-clip">
-            <circle cx={0} cy={0} r={0}>
-              {/* Expands: center → director ring (90) → GM ring (190) → sector ring (430) */}
-              <animate
-                attributeName="r"
-                values="0;95;95;195;195;440;440"
-                keyTimes="0;0.07;0.27;0.40;0.60;0.73;1"
-                dur="9s"
-                fill="freeze"
-                repeatCount="1"
-              />
-            </circle>
-          </clipPath>
-
-          <linearGradient id="beam-sweep-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="485" y2="0">
-            <stop offset="0%"   stopColor="#081437" stopOpacity="0"   />
-            <stop offset="14%"  stopColor="#C2410C" stopOpacity="0.2" />
-            <stop offset="58%"  stopColor="#C2410C" stopOpacity="0.72"/>
-            <stop offset="87%"  stopColor="#e8541a" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#ffffff"  stopOpacity="1"   />
-          </linearGradient>
-
-          <filter id="beam-glow-filter" x="-5%" y="-400%" width="110%" height="900%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+          {/* ── Orbital animation defs ── */}
+          <filter id="orb-glow" filterUnits="userSpaceOnUse" x="-480" y="-480" width="960" height="960">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="orb-tip-glow" filterUnits="userSpaceOnUse" x="-480" y="-480" width="960" height="960">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -781,12 +900,11 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
             })
         }
 
-        {/* ── Beam intro (overview only) ────────────────────────────── */}
-        {!activeSectorId && renderBeamAnimation()}
-
-        {/* ── OVERVIEW MODE ─────────────────────────────────────────── */}
+{/* ── OVERVIEW MODE ─────────────────────────────────────────── */}
         {!activeSectorId && (
           <g key="overview" className={styles.contentGroup}>
+            {/* Orbital intro + alive animation */}
+            {renderOrbitalAnimation()}
             {/* Dir→GG connections (Bezier) — level < 2 only */}
             {renderConnections(connections.filter((c) => c.level < 2), overviewPosMap)}
             {/* GG→Sector arc-spine connections */}
