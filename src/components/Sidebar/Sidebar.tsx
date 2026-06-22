@@ -40,15 +40,6 @@ function IconUsers() {
   );
 }
 
-function IconLab() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 2h6M10 2v6.5L5 18a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9.5V2"/>
-      <path d="M7 14h10"/>
-    </svg>
-  );
-}
-
 function IconSettings() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -62,7 +53,6 @@ const NAV = [
   { href: '/',         label: 'Organograma', sub: 'Estrutura da empresa', Icon: IconOrg      },
   { href: '/unidades', label: 'Unidades',    sub: 'Mapa de unidades',     Icon: IconBuilding },
   { href: '/clientes', label: 'Clientes',    sub: 'Mapa de clientes',     Icon: IconUsers    },
-  { href: '/globe-lab', label: 'Globe Lab',  sub: 'Globo 3D (experimental)', Icon: IconLab   },
 ] as const;
 
 export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
