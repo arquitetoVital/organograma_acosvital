@@ -1,0 +1,17 @@
+[
+  { "codigo_omie": 1001, "nome": "Aços Vital — Matriz", "endereco": "Av. das Indústrias, 1500 — Distrito Industrial, São Paulo, SP", "latitude": -23.5505, "longitude": -46.6333 },
+  { "codigo_omie": 1002, "nome": "Aços Vital — Centro de Distribuição Guarulhos", "endereco": "Rod. Presidente Dutra, km 225 — Guarulhos, SP", "latitude": -23.4543, "longitude": -46.5337 },
+  { "codigo_omie": 1003, "nome": "Aços Vital — Filial Campinas", "endereco": "Av. John Boyd Dunlop, 2000 — Campinas, SP", "latitude": -22.9056, "longitude": -47.0608 },
+  { "codigo_omie": 1004, "nome": "Aços Vital — Filial Rio de Janeiro", "endereco": "Av. Brasil, 9000 — Rio de Janeiro, RJ", "latitude": -22.9068, "longitude": -43.1729 },
+  { "codigo_omie": 1005, "nome": "Aços Vital — Filial Belo Horizonte", "endereco": "Av. Cristiano Machado, 4000 — Belo Horizonte, MG", "latitude": -19.9167, "longitude": -43.9345 },
+  { "codigo_omie": 1006, "nome": "Aços Vital — Filial Curitiba", "endereco": "Av. das Torres, 1200 — Curitiba, PR", "latitude": -25.4284, "longitude": -49.2733 },
+  { "codigo_omie": 1007, "nome": "Aços Vital — Filial Joinville", "endereco": "R. Dona Francisca, 8300 — Joinville, SC", "latitude": -26.3044, "longitude": -48.8487 },
+  { "codigo_omie": 1008, "nome": "Aços Vital — Filial Porto Alegre", "endereco": "Av. Assis Brasil, 5000 — Porto Alegre, RS", "latitude": -30.0346, "longitude": -51.2177 },
+  { "codigo_omie": 1009, "nome": "Aços Vital — Filial Goiânia", "endereco": "Av. Anhanguera, 7000 — Goiânia, GO", "latitude": -16.6869, "longitude": -49.2648 },
+  { "codigo_omie": 1010, "nome": "Aços Vital — Filial Brasília", "endereco": "SIA Trecho 3, Lote 600 — Brasília, DF", "latitude": -15.7939, "longitude": -47.8828 },
+  { "codigo_omie": 1011, "nome": "Aços Vital — Filial Vitória", "endereco": "Av. Vitória, 2500 — Vitória, ES", "latitude": -20.3155, "longitude": -40.3128 },
+  { "codigo_omie": 1012, "nome": "Aços Vital — Filial Salvador", "endereco": "Av. Luís Viana Filho, 1100 — Salvador, BA", "latitude": -12.9777, "longitude": -38.5016 },
+  { "codigo_omie": 1013, "nome": "Aços Vital — Filial Recife", "endereco": "Av. Recife, 3500 — Recife, PE", "latitude": -8.0476, "longitude": -34.8770 },
+  { "codigo_omie": 1014, "nome": "Aços Vital — Filial Fortaleza", "endereco": "Av. Washington Soares, 4000 — Fortaleza, CE", "latitude": -3.7172, "longitude": -38.5433 },
+  { "codigo_omie": 1015, "nome": "Aços Vital — Filial Manaus", "endereco": "Av. Torquato Tapajós, 6000 — Manaus, AM", "latitude": -3.1190, "longitude": -60.0217 }
+]
