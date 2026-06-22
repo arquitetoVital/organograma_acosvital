@@ -1,0 +1,103 @@
+import { memo } from 'react';
+import { PositionedNode } from '@/types/orgChart';
+import styles from './NodeCard.module.css';
+
+interface Props {
+  node: PositionedNode;
+  color: string;
+  /** Current viewBox width — used to compute apparent on-screen radius for LOD */
+  vbW: number;
+}
+
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+function getInitials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
+function getShortName(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max - 1) + '…' : text;
+}
+
+// Approximate on-screen radius (assumes ~900px display width)
+function screenR(svgR: number, vbW: number): number {
+  return svgR * (900 / vbW);
+}
+
+function NodeCardInner({ node, color, vbW }: Props) {
+  const r = node.radius;
+  const sr = screenR(r, vbW);
+  const showImage = sr >= 9 && !!node.photoUrl;
+  const showLabel = sr >= 13;
+  const clipId = `clip-${node.id}`;
+  const fontSize = r <= 13 ? 8 : r <= 20 ? 9 : 10;
+
+  return (
+    <g transform={`translate(${node.x}, ${node.y})`} className={styles.group}>
+      <title>{node.name} — {node.role}</title>
+
+      {showImage && (
+        <defs>
+          <clipPath id={clipId}>
+            <circle cx={0} cy={0} r={r - 1} />
+          </clipPath>
+        </defs>
+      )}
+
+      {/* Outer glow */}
+      <circle cx={0} cy={0} r={r + 5} fill={color} fillOpacity={0.07} />
+
+      {/* Border */}
+      <circle cx={0} cy={0} r={r + 2} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.75} className={styles.ring} />
+
+      {/* Background */}
+      <circle cx={0} cy={0} r={r} style={{ fill: 'var(--bg-deep)' }} />
+
+      {/* Initials fallback */}
+      {!showImage && (
+        <text x={0} y={r * 0.4} textAnchor="middle" fill={color} fontSize={r * 0.52} fontWeight="700" fontFamily={FONT}>
+          {getInitials(node.name)}
+        </text>
+      )}
+
+      {/* Photo */}
+      {showImage && (
+        <image
+          href={node.photoUrl}
+          x={-r} y={-r}
+          width={r * 2} height={r * 2}
+          clipPath={`url(#${clipId})`}
+          preserveAspectRatio="xMidYMid slice"
+        />
+      )}
+
+      {/* Labels (only when node is large enough on screen) */}
+      {showLabel && (
+        <>
+          <text x={0} y={r + 14} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={fontSize} fontWeight="600" fontFamily={FONT}>
+            {getShortName(node.name)}
+          </text>
+          <text x={0} y={r + 26} textAnchor="middle" fill={color} fontSize={fontSize - 1} fontFamily={FONT} opacity={0.88}>
+            {truncate(node.role, 22)}
+          </text>
+        </>
+      )}
+    </g>
+  );
+}
+
+function propsAreEqual(prev: Props, next: Props): boolean {
+  if (prev.node !== next.node || prev.color !== next.color) return false;
+  const prevSR = screenR(prev.node.radius, prev.vbW);
+  const nextSR = screenR(next.node.radius, next.vbW);
+  return (prevSR >= 9) === (nextSR >= 9) && (prevSR >= 13) === (nextSR >= 13);
+}
+
+const NodeCard = memo(NodeCardInner, propsAreEqual);
+export default NodeCard;

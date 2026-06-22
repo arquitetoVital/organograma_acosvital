@@ -1,0 +1,68 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import OrgChart from '@/components/OrgChart/OrgChart';
+import {
+  calculateLayout, calculateConnections,
+  OVERVIEW_RING_RADII, OVERVIEW_NODE_RADIUS,
+} from '@/utils/radialLayout';
+import type { OrgNode } from '@/types/orgChart';
+
+interface Props {
+  initialNodes: OrgNode[];
+  levelColors: Record<number, string>;
+  levelNames: Record<number, string>;
+}
+
+export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, levelNames }: Props) {
+  const [nodes, setNodes] = useState<OrgNode[]>(initialNodes);
+
+  const overviewNodes = useMemo(
+    () => nodes.filter((n) => n.level <= 2 && !n.sectorDirectorOf),
+    [nodes],
+  );
+  const positions = useMemo(
+    () => calculateLayout(overviewNodes, OVERVIEW_RING_RADII, OVERVIEW_NODE_RADIUS),
+    [overviewNodes],
+  );
+  const connections = useMemo(() => calculateConnections(positions), [positions]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let debounce: ReturnType<typeof setTimeout>;
+
+    const channel = supabase
+      .channel('org_nodes_overview')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'organograma', table: 'org_nodes' },
+        () => {
+          clearTimeout(debounce);
+          debounce = setTimeout(async () => {
+            const res = await fetch('/api/org');
+            if (res.ok) {
+              const data: unknown = await res.json();
+              if (Array.isArray(data)) setNodes(data as OrgNode[]);
+            }
+          }, 350);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      clearTimeout(debounce);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  return (
+    <OrgChart
+      positions={positions}
+      connections={connections}
+      allNodes={nodes}
+      levelColors={levelColors}
+      levelNames={levelNames}
+    />
+  );
+}

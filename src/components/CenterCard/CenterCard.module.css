@@ -1,0 +1,19 @@
+.group {
+  cursor: default;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: filter 0.28s ease;
+}
+
+.group:hover {
+  filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.35));
+}
+
+.border {
+  transition: stroke-opacity 0.28s ease, stroke-width 0.28s ease;
+}
+
+.group:hover .border {
+  stroke-opacity: 1;
+  stroke-width: 3;
+}

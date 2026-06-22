@@ -1,0 +1,26 @@
+.group {
+  cursor: pointer;
+  transition: filter 0.18s ease;
+}
+
+.group:hover {
+  filter: drop-shadow(0 0 14px rgba(167, 139, 250, 0.5));
+}
+
+.group:focus {
+  outline: none;
+}
+
+.group:focus-visible {
+  filter: drop-shadow(0 0 16px rgba(167, 139, 250, 0.75));
+}
+
+.border {
+  transition: stroke-opacity 0.18s ease, stroke-width 0.18s ease;
+}
+
+.group:hover .border,
+.group:focus-visible .border {
+  stroke-opacity: 1;
+  stroke-width: 3;
+}

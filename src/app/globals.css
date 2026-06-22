@@ -1,0 +1,220 @@
+/* ============================================================================
+ * SISTEMA DE DESIGN — Aços Vital
+ * Fonte única de verdade para cor, tipografia, espaçamento, raio, elevação e
+ * movimento. Todos os componentes devem consumir estes tokens (nunca cravar
+ * cores soltas). Suporta tema escuro (padrão) e claro via [data-theme="light"].
+ * ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ===== Marca ===== */
+  --brand:         #f97316;
+  --brand-soft:    #fb923c;
+  --brand-strong:  #c2410c;
+
+  /* ===== Acento interativo (azul) ===== */
+  --accent:        #3b82f6;
+  --accent-soft:   #60a5fa;
+  --accent-text:   #93c5fd;
+  --accent-bg:     rgba(59, 130, 246, 0.12);
+
+  /* ===== Cores semânticas ===== */
+  --success:       #34d399;
+  --danger:        #f87171;
+  --warning:       #fbbf24;
+  --info:          #60a5fa;
+
+  /* ===== Hierarquia (espelha src/data/orgData.ts) ===== */
+  --level-0: #f59e0b;
+  --level-1: #3b82f6;
+  --level-2: #a78bfa;
+  --level-3: #6366f1;
+  --level-4: #8b5cf6;
+  --level-5: #d946ef;
+  --level-6: #ec4899;
+  --level-7: #10b981;
+  --level-8: #14b8a6;
+  --level-9: #06b6d4;
+
+  /* ===== Superfícies (escuro) ===== */
+  --bg-base:     #0a0f1c;
+  --bg-deep:     #142133;
+  --bg-surface:  #1b2f47;
+  --bg-elevated: #223652;
+  --bg-sidebar:  rgba(4, 6, 18, 0.98);
+  --bg-space:    #020617;
+
+  /* ===== Vidro (glassmorphism) ===== */
+  --glass-bg:        rgba(14, 26, 42, 0.82);
+  --glass-bg-strong: rgba(8, 14, 40, 0.90);
+  --glass-border:    rgba(255, 255, 255, 0.10);
+  --glass-blur:      blur(14px);
+  --bg-glass:        var(--glass-bg); /* compat */
+
+  /* ===== Estados de interação ===== */
+  --hover-bg:        rgba(255, 255, 255, 0.05);
+  --hover-bg-strong: rgba(255, 255, 255, 0.09);
+
+  /* ===== Bordas ===== */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-light:  rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  /* ===== Texto ===== */
+  --text-primary:   #f1f5f9;
+  --text-secondary: rgba(255, 255, 255, 0.62);
+  --text-muted:     rgba(255, 255, 255, 0.45);
+  --text-faint:     rgba(255, 255, 255, 0.30);
+
+  /* ===== Tipografia ===== */
+  --font-sans:    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono:    var(--font-geist-mono), ui-monospace, 'SF Mono', monospace;
+  --font-canvas:  var(--font-geist-sans), system-ui, sans-serif;
+
+  --text-xs:  11px;
+  --text-sm:  12.5px;
+  --text-base: 14px;
+  --text-lg:  16px;
+  --text-xl:  20px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+
+  /* ===== Espaçamento ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ===== Raio ===== */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-full: 999px;
+
+  /* ===== Elevação ===== */
+  --shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.40);
+  --shadow-md:    0 4px 14px rgba(0, 0, 0, 0.40);
+  --shadow-lg:    0 12px 40px rgba(0, 0, 0, 0.50);
+  --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.45);
+
+  /* ===== Movimento ===== */
+  --dur-fast:    0.15s;
+  --dur-normal:  0.25s;
+  --dur-slow:    0.40s;
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-fast:   var(--dur-fast) var(--ease-in-out);   /* compat */
+  --ease-normal: var(--dur-normal) var(--ease-in-out); /* compat */
+
+  /* ===== Camadas (z-index) ===== */
+  --z-base:    1;
+  --z-overlay: 10;
+  --z-panel:   20;
+  --z-modal:   100;
+  --z-toast:   1000;
+}
+
+/* ===== Tema claro ===== */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --accent-text: #1d4ed8;
+  --accent-bg:   rgba(59, 130, 246, 0.12);
+
+  --bg-base:     #e9eef6;
+  --bg-deep:     #f3f6fb;
+  --bg-surface:  #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-sidebar:  rgba(248, 250, 253, 0.98);
+  /* --bg-space permanece escuro: o espaço não tem modo claro */
+
+  --glass-bg:        rgba(255, 255, 255, 0.78);
+  --glass-bg-strong: rgba(255, 255, 255, 0.92);
+  --glass-border:    rgba(15, 23, 42, 0.10);
+
+  --hover-bg:        rgba(15, 23, 42, 0.05);
+  --hover-bg-strong: rgba(15, 23, 42, 0.09);
+
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-light:  rgba(15, 23, 42, 0.14);
+  --border-strong: rgba(15, 23, 42, 0.22);
+
+  --text-primary:   #0f172a;
+  --text-secondary: rgba(15, 23, 42, 0.65);
+  --text-muted:     rgba(15, 23, 42, 0.48);
+  --text-faint:     rgba(15, 23, 42, 0.35);
+
+  --shadow-sm:    0 1px 3px rgba(15, 23, 42, 0.10);
+  --shadow-md:    0 4px 14px rgba(15, 23, 42, 0.12);
+  --shadow-lg:    0 12px 40px rgba(15, 23, 42, 0.16);
+  --shadow-glass: 0 4px 24px rgba(15, 23, 42, 0.14);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--dur-normal) var(--ease-in-out);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Utilitário de vidro reutilizável ── elevação + blur padronizados */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Anel de foco acessível e consistente para navegação por teclado */
+:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* Respeita usuários que preferem menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

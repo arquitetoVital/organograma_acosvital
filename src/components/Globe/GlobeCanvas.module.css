@@ -1,0 +1,269 @@
+.wrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  user-select: none;
+}
+
+.canvas:active {
+  cursor: grabbing;
+}
+
+/* ── Title overlay ── */
+.titleOverlay {
+  position: absolute;
+  top: 32px;
+  left: 36px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.titleTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #f97316;
+  margin-bottom: 10px;
+}
+
+.titleTag::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  background: #f97316;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.titleMain {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 32px rgba(0, 0, 0, 0.95);
+  white-space: pre-line;
+}
+
+.titleHint {
+  font-size: 9px;
+  color: rgba(148, 163, 184, 0.38);
+  margin-top: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Side text — left center ── */
+.sideText {
+  position: absolute;
+  left: 36px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  user-select: none;
+  max-width: 420px;
+  border-left: 2px solid rgba(249, 115, 22, 0.6);
+  padding-left: 20px;
+  opacity: 1;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.sideTextHidden {
+  opacity: 0;
+  transform: translateY(-50%) translateX(-12px);
+}
+
+.sideTextTitle {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #f97316;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.sideTextBody {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: rgba(241, 245, 249, 0.92);
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.9);
+}
+
+/* ── Control panel — bottom-right to avoid overlap with parent app buttons ── */
+.controlPanel {
+  position: absolute;
+  bottom: 90px;
+  right: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: rgba(8, 14, 40, 0.84);
+  border: 1px solid rgba(51, 80, 160, 0.30);
+  border-radius: 14px;
+  padding: 8px 5px;
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.48);
+}
+
+.panelBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(148, 163, 184, 0.60);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.panelBtn:hover:not(:disabled) {
+  background: rgba(249, 115, 22, 0.16);
+  color: #fff;
+  border-color: rgba(249, 115, 22, 0.42);
+}
+
+.panelBtn:disabled {
+  opacity: 0.22;
+  cursor: default;
+}
+
+.panelBtnActive {
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, 0.38) !important;
+}
+
+.panelBtnActive:hover {
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.60) !important;
+}
+
+.panelDivider {
+  width: 20px;
+  height: 1px;
+  background: rgba(51, 80, 160, 0.32);
+  margin: 2px 0;
+  flex-shrink: 0;
+}
+
+.panelZoomPct {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(148, 163, 184, 0.42);
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 0;
+}
+
+/* ── Stats card — bottom-left, mirrors control panel on the right ── */
+.statsBar {
+  position: absolute;
+  bottom: 32px;
+  left: 36px;
+  display: flex;
+  background: rgba(8, 14, 40, 0.84);
+  border: 1px solid rgba(249, 115, 22, 0.22);
+  border-radius: 14px;
+  overflow: hidden;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.48);
+}
+
+.statItem {
+  padding: 12px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.statItem + .statItem {
+  border-left: 1px solid rgba(51, 80, 160, 0.25);
+}
+
+.statValue {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.statValuePoints {
+  color: #ff7043;
+  text-shadow: 0 0 28px rgba(255, 112, 67, 0.45);
+}
+
+.statValueConns {
+  color: rgba(120, 180, 255, 0.95);
+}
+
+.statLabel {
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.45);
+}
+
+
+/* ── Tooltip ── */
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  background: rgba(8, 14, 40, 0.94);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: 'Fira Sans', system-ui, sans-serif;
+  color: #e2e8f0;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, calc(-100% - 12px));
+}
+
+.tooltipCity {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(148, 163, 184, 0.75);
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.tooltipCount {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ef4444;
+}

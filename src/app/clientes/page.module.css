@@ -1,0 +1,102 @@
+.page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #020617;
+  position: relative;
+  display: flex;
+}
+
+/* ── Globe canvas ──────────────────────────────────────────────────── */
+.globeArea {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+}
+
+/* ── Side panel ────────────────────────────────────────────────────── */
+.panel {
+  width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(4, 6, 22, 0.96);
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 20;
+}
+
+.panelOpen {
+  transform: translateX(0);
+  position: relative;
+}
+
+/* ── Toggle button ─────────────────────────────────────────────────── */
+.panelToggle {
+  position: absolute;
+  bottom: 28px;
+  right: 28px;
+  z-index: 30;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(185, 28, 28, 0.9);
+  border: 1.5px solid rgba(252, 100, 100, 0.4);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 18px rgba(185, 28, 28, 0.5);
+  transition: background 0.15s, right 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panelToggle:hover {
+  background: rgba(220, 38, 38, 1);
+}
+
+.panelToggleShifted {
+  right: calc(320px + 16px);
+}
+
+/* ── Loading badge ─────────────────────────────────────────────────── */
+.loadingBadge {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: rgba(8, 14, 40, 0.88);
+  border: 1px solid rgba(51, 80, 160, 0.35);
+  color: rgba(180, 210, 255, 0.75);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.loadingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #60a5fa;
+  flex-shrink: 0;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}

@@ -1,0 +1,215 @@
+/* ── Modal backdrop ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(3px);
+}
+
+/* ── Modal container ── */
+.modal {
+  background: #0f1929;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 28px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6);
+}
+
+/* ── Modal header ── */
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalHead h2 { margin: 0; font-size: 18px; font-weight: 700; color: #f1f5f9; }
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 16px;
+  cursor: pointer;
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+}
+.closeBtn:hover { background: #1e293b; color: #f1f5f9; }
+
+/* ── Avatar row ── */
+.modalAvatarRow {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+/* ── Two-column form grid ── */
+.modalGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.span2 { grid-column: 1 / -1; }
+
+/* ── Modal footer ── */
+.modalFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid #1e293b;
+}
+
+/* ── Form elements ── */
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.input, .select {
+  font-size: 14px;
+  padding: 9px 12px;
+  background: #0a0f1e;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  color: #e2e8f0;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  font-family: inherit;
+}
+.input::placeholder { color: #334155; }
+.input:focus, .select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px #3b82f625; }
+
+/* ── Color swatches ── */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.swatch {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform .1s, border-color .1s;
+}
+.swatch:hover { transform: scale(1.2); }
+.swatchOn { border-color: #fff !important; transform: scale(1.15); }
+.colorInput {
+  width: 32px; height: 28px;
+  padding: 0 2px;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+}
+
+/* ── Buttons ── */
+.btnPrimary {
+  padding: 8px 18px;
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.btnPrimary:hover:not(:disabled) { background: #2563eb; }
+.btnPrimary:disabled { opacity: .5; cursor: not-allowed; }
+
+.btnSecondary {
+  padding: 8px 18px;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #2d3f5c;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btnSecondary:hover { background: #2d3f5c; }
+
+.btnDanger {
+  padding: 8px 18px;
+  background: none;
+  color: #f87171;
+  border: 1px solid #3b1f1f;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  margin-right: auto;
+}
+.btnDanger:hover:not(:disabled) { background: #3b0f0f; }
+.btnDanger:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Director type toggle (used in DirectorModal) ── */
+.dirTypeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: rgba(59,130,246,.04);
+  border: 1px solid rgba(59,130,246,.12);
+  border-radius: 10px;
+}
+.dirTypeLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #3b82f6;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+/* ── Shared / individual toggle ── */
+.sharedToggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.toggleBtn {
+  flex: 1; padding: 8px 12px;
+  background: transparent;
+  border: none; border-right: 1px solid #1e293b;
+  color: #64748b; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+.toggleBtn:last-child { border-right: none; }
+.toggleBtn:hover { background: #1e293b; color: #e2e8f0; }
+.toggleBtnOn { background: #1e3a5f !important; color: #93c5fd !important; }
+
+/* ── Shared-director hint ── */
+.sharedHint {
+  font-size: 12px; color: #64748b;
+  background: rgba(59,130,246,.06);
+  border: 1px solid rgba(59,130,246,.15);
+  border-radius: 8px; padding: 8px 12px;
+  margin-top: 2px;
+}
+.sharedHint strong { color: #93c5fd; }

@@ -1,0 +1,171 @@
+import { OrgNode, PositionedNode, Connection } from '@/types/orgChart';
+
+// ── Overview ring radii (used for the 3-level initial view) ────────────
+export const OVERVIEW_RING_RADII: Record<number, number> = {
+  0: 0,    // Diretoria (center)
+  1: 190,  // Gerência Geral (5 nodes)
+  2: 430,  // Setores (18 nodes)
+};
+
+// ── Sector detail ring radii (BFS depth from sector node) ─────────────
+export const SECTOR_RING_RADII: Record<number, number> = {
+  0: 0,     // sector card (center)
+  1: 150,   // Gerente de Setor
+  2: 300,   // Coordenadores
+  3: 475,   // Supervisores
+  4: 665,   // Líderes
+  5: 875,   // Analistas
+  6: 1105,  // Assistentes
+  7: 1345,  // Aprendizes
+};
+
+// ── Node visual radii for overview ────────────────────────────────────
+export const OVERVIEW_NODE_RADIUS: Record<number, number> = {
+  0: 78,  // directors center card
+  1: 28,  // GMs
+  2: 36,  // sector cards (bigger — show names)
+};
+
+// ── Node visual radii for sector detail (keyed by BFS depth) ──────────
+export const SECTOR_NODE_RADIUS: Record<number, number> = {
+  0: 52,  // sector card at center
+  1: 38,  // gerente de setor
+  2: 30,  // coordenadores
+  3: 25,  // supervisores
+  4: 21,  // líderes
+  5: 18,  // analistas
+  6: 15,  // assistentes
+  7: 12,  // aprendizes
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────
+function countLeaves(nodeId: string, childrenOf: Map<string, OrgNode[]>): number {
+  const kids = childrenOf.get(nodeId);
+  if (!kids || kids.length === 0) return 1;
+  return kids.reduce((sum, kid) => sum + countLeaves(kid.id, childrenOf), 0);
+}
+
+/** Return the sector node + every descendant (BFS). */
+export function getSubtree(rootId: string, allNodes: OrgNode[]): OrgNode[] {
+  const childrenOf = new Map<string, OrgNode[]>();
+  allNodes.forEach((n) => {
+    if (!n.parentId) return;
+    if (!childrenOf.has(n.parentId)) childrenOf.set(n.parentId, []);
+    childrenOf.get(n.parentId)!.push(n);
+  });
+
+  const idMap = new Map(allNodes.map((n) => [n.id, n]));
+  const result: OrgNode[] = [];
+  const queue: string[] = [rootId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    const node = idMap.get(id);
+    if (!node) continue;
+    result.push(node);
+    childrenOf.get(id)?.forEach((c) => queue.push(c.id));
+  }
+  return result;
+}
+
+// ── Layout ─────────────────────────────────────────────────────────────
+export function calculateLayout(
+  nodes: OrgNode[],
+  ringRadii: Record<number, number> = OVERVIEW_RING_RADII,
+  nodeRadii: Record<number, number> = OVERVIEW_NODE_RADIUS,
+  // Optional: override which ring a node goes to (e.g. level-based instead of BFS depth)
+  getDepth?: (node: OrgNode, bfsDepth: number) => number,
+): PositionedNode[] {
+  const childrenOf = new Map<string, OrgNode[]>();
+  nodes.forEach((n) => {
+    if (!n.parentId) return;
+    if (!childrenOf.has(n.parentId)) childrenOf.set(n.parentId, []);
+    childrenOf.get(n.parentId)!.push(n);
+  });
+
+  const maxDefinedDepth = Math.max(...Object.keys(nodeRadii).map(Number));
+  function getNodeR(depth: number) {
+    return nodeRadii[depth] ?? nodeRadii[maxDefinedDepth] ?? 8;
+  }
+  function getRingR(depth: number): number {
+    if (ringRadii[depth] !== undefined) return ringRadii[depth];
+    const maxRing = Math.max(...Object.keys(ringRadii).map(Number));
+    return ringRadii[maxRing] + 200 * (depth - maxRing);
+  }
+
+  const result: PositionedNode[] = [];
+  const START = -Math.PI / 2;
+
+  // Roots at center (depth 0)
+  const roots = nodes.filter((n) => n.parentId === null);
+  roots.forEach((root) => {
+    result.push({ ...root, x: 0, y: 0, angle: 0, radius: getNodeR(0) });
+  });
+
+  // BFS for depth 1+
+  const level1 = roots.flatMap((r) => childrenOf.get(r.id) ?? []);
+  if (level1.length === 0) return result;
+
+  const totalLeaves = level1.reduce((s, n) => s + countLeaves(n.id, childrenOf), 0);
+
+  interface QItem { node: OrgNode; depth: number; sa: number; ea: number }
+
+  let cursor = START;
+  const queue: QItem[] = level1.map((n) => {
+    const leaves = countLeaves(n.id, childrenOf);
+    const arc = 2 * Math.PI * (leaves / Math.max(totalLeaves, 1));
+    const item: QItem = { node: n, depth: 1, sa: cursor, ea: cursor + arc };
+    cursor += arc;
+    return item;
+  });
+
+  while (queue.length) {
+    const { node, depth, sa, ea } = queue.shift()!;
+    // Use custom depth for ring/radius; BFS depth (depth+1) still drives arc splitting for children
+    const d = getDepth ? getDepth(node, depth) : depth;
+    const angle = (sa + ea) / 2;
+    const r = getRingR(d);
+    result.push({ ...node, x: Math.cos(angle) * r, y: Math.sin(angle) * r, angle, radius: getNodeR(d) });
+
+    const kids = childrenOf.get(node.id) ?? [];
+    if (!kids.length) continue;
+    const kidLeaves = kids.map((k) => countLeaves(k.id, childrenOf));
+    const totalKL = Math.max(kidLeaves.reduce((s, l) => s + l, 0), 1);
+    const arc = ea - sa;
+    let kc = sa;
+    kids.forEach((kid, i) => {
+      const ka = arc * (kidLeaves[i] / totalKL);
+      queue.push({ node: kid, depth: depth + 1, sa: kc, ea: kc + ka });
+      kc += ka;
+    });
+  }
+
+  return result;
+}
+
+// ── Connections ────────────────────────────────────────────────────────
+export function calculateConnections(positions: PositionedNode[]): Connection[] {
+  const posMap = new Map(positions.map((p) => [p.id, p]));
+  const connections: Connection[] = [];
+
+  positions.forEach((node) => {
+    if (!node.parentId) return;
+    const parent = posMap.get(node.parentId);
+    if (!parent) return;
+    const dx = node.x - parent.x;
+    const dy = node.y - parent.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const nx = dist > 0 ? dx / dist : 0;
+    const ny = dist > 0 ? dy / dist : 0;
+    connections.push({
+      fromId: parent.id,
+      toId: node.id,
+      fromX: parent.x + nx * parent.radius,
+      fromY: parent.y + ny * parent.radius,
+      toX: node.x - nx * node.radius,
+      toY: node.y - ny * node.radius,
+      level: node.level,
+    });
+  });
+
+  return connections;
+}
