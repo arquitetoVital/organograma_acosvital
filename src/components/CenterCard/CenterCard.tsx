@@ -76,8 +76,9 @@ export default function CenterCard({ node, color }: Props) {
       {/* Initials fallback */}
       <text
         x={0}
-        y={CR * 0.35}
+        y={0}
         textAnchor="middle"
+        dominantBaseline="central"
         fill={color}
         fontSize={CR * 0.42}
         fontWeight="700"

@@ -117,34 +117,11 @@ export async function patchNode(
 // Exclusão
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Remove um setor inteiro e todos os seus descendentes recursivamente. */
-async function cascadeDeleteSector(supabase: SupabaseClient, sectorId: string): Promise<number> {
-  const { data: allRows, error: fetchError } = await table(supabase)
-    .select('id, parent_id');
-
-  if (fetchError || !allRows) throw new Error('Falha ao buscar nós para exclusão em cascata.');
-
-  const rows = allRows as Array<{ id: string; parent_id: string | null }>;
-
-  const idsToDelete = new Set<string>();
-  const collectDescendants = (nodeId: string) => {
-    idsToDelete.add(nodeId);
-    rows.filter(r => r.parent_id === nodeId).forEach(child => collectDescendants(child.id));
-  };
-  collectDescendants(sectorId);
-
-  const { error: deleteError } = await table(supabase)
-    .delete()
-    .in('id', [...idsToDelete]);
-
-  if (deleteError) throw new Error(deleteError.message);
-  return idsToDelete.size;
-}
-
 /**
  * Remove um nó com comportamento contextual:
- * - **Setor/sub-setor**: exclui em cascata toda a subárvore
- * - **Pessoa**: promove os subordinados diretos ao pai dela antes de remover
+ * - **Setor / sub-setor / GM (level 1)**: filhos diretos ficam órfãos (parent_id = null),
+ *   pendentes de reatribuição. Apenas o nó em si é excluído.
+ * - **Pessoa (level > 1, !isSector)**: subordinados diretos são promovidos ao avô.
  *
  * @returns Informações sobre o que foi removido (para logging de auditoria)
  */
@@ -153,24 +130,31 @@ export async function removeNode(
   id:       string,
 ): Promise<{ wasCascade: boolean; removedCount: number }> {
   const { data: target, error: fetchError } = await table(supabase)
-    .select('id, parent_id, is_sector')
+    .select('id, parent_id, is_sector, level')
     .eq('id', id)
     .single();
 
   if (fetchError || !target) throw new Error('Nó não encontrado.');
 
-  const row = target as { parent_id: string | null; is_sector: boolean };
+  const row = target as { parent_id: string | null; is_sector: boolean; level: number };
 
-  if (row.is_sector) {
-    const removedCount = await cascadeDeleteSector(supabase, id);
-    return { wasCascade: true, removedCount };
+  // Setor, sub-setor ou GM: filhos ficam órfãos (parentId = null)
+  if (row.is_sector || row.level === 1) {
+    const { error: orphanError } = await table(supabase)
+      .update({ parent_id: null })
+      .eq('parent_id', id);
+    if (orphanError) throw new Error(orphanError.message);
+
+    const { error: deleteError } = await table(supabase).delete().eq('id', id);
+    if (deleteError) throw new Error(deleteError.message);
+
+    return { wasCascade: false, removedCount: 1 };
   }
 
-  // Pessoa: re-parenta subordinados diretos ao avô antes de remover
+  // Pessoa: promove subordinados diretos ao avô antes de remover
   const { error: reparentError } = await table(supabase)
     .update({ parent_id: row.parent_id })
     .eq('parent_id', id);
-
   if (reparentError) throw new Error(reparentError.message);
 
   const { error: deleteError } = await table(supabase).delete().eq('id', id);

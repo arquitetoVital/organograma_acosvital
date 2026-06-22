@@ -10,13 +10,15 @@ import styles from './modals.module.css';
 
 interface CreateManagerModalProps {
   /** Lista de diretores disponíveis para o GG reportar. */
-  directors:     OrgNode[];
-  onClose:       () => void;
-  setNodes:      React.Dispatch<React.SetStateAction<OrgNode[]>>;
-  markSyncing:   (id: string) => void;
-  unmarkSyncing: (id: string) => void;
-  showToast:     (message: string, type?: 'success' | 'error') => void;
-  refreshNodes:  () => Promise<void>;
+  directors:          OrgNode[];
+  onClose:            () => void;
+  setNodes:           React.Dispatch<React.SetStateAction<OrgNode[]>>;
+  markSyncing:        (id: string) => void;
+  unmarkSyncing:      (id: string) => void;
+  showToast:          (message: string, type?: 'success' | 'error') => void;
+  refreshNodes:       () => Promise<void>;
+  /** Chamado após o GG ser criado com sucesso; permite reatribuir setores órfãos. */
+  onManagerCreated?:  (newManagerId: string) => Promise<void>;
 }
 
 /**
@@ -31,6 +33,7 @@ export default function CreateManagerModal({
   unmarkSyncing,
   showToast,
   refreshNodes,
+  onManagerCreated,
 }: CreateManagerModalProps) {
   const [form, setForm] = useState({
     name:        '',
@@ -69,6 +72,7 @@ export default function CreateManagerModal({
 
     try {
       await createOrgNode(newManager);
+      await onManagerCreated?.(newId);
       await refreshNodes();
       showToast('Gerente Geral adicionado!');
     } catch (err) {

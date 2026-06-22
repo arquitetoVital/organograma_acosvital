@@ -20,6 +20,8 @@ interface DirectorModalProps {
   unmarkSyncing:       (id: string) => void;
   showToast:           (message: string, type?: 'success' | 'error') => void;
   refreshNodes:        () => Promise<void>;
+  /** Chamado após a diretoria ser criada com sucesso; permite vincular GGs órfãos. */
+  onDirectorCreated?:  (newDirectorId: string) => Promise<void>;
 }
 
 /**
@@ -40,6 +42,7 @@ export default function DirectorModal({
   unmarkSyncing,
   showToast,
   refreshNodes,
+  onDirectorCreated,
 }: DirectorModalProps) {
   const isEditing    = directorBeingEdited !== null;
   const isSharedName = directorBeingEdited?.name.includes(' & ') ?? false;
@@ -108,6 +111,7 @@ export default function DirectorModal({
         await updateOrgNode(directorBeingEdited!.id, patch);
       } else {
         await createOrgNode({ id: nodeId, ...patch, level: 0, parentId: null, isSector: false });
+        await onDirectorCreated?.(nodeId);
       }
       await refreshNodes();
       showToast(isEditing ? 'Diretoria atualizada!' : 'Diretoria criada!');

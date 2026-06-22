@@ -24,7 +24,7 @@ interface Props {
 
 interface ViewBox { x: number; y: number; w: number; h: number }
 
-const OVERVIEW_VB: ViewBox = { x: -460, y: -460, w: 920,  h: 920  };
+const OVERVIEW_VB: ViewBox = { x: -540, y: -540, w: 1080, h: 1080 };
 const SECTOR_VB:   ViewBox = { x: -1100, y: -1100, w: 2200, h: 2200 };
 const MIN_W_OV = 300;
 const MAX_W_OV = 1500;
@@ -197,8 +197,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     const source = activeSectorId ? (sectorDetail?.pos ?? []) : positions;
     const counts: Record<number, number> = {};
     source.forEach((p) => {
-      // In sector detail exclude the center card; in overview include sectors (level 2 count = 18)
-      if (activeSectorId && p.isSector) return;
+      if (p.isSector) return; // setores e sub-setores nunca são contados como pessoas
       counts[p.level] = (counts[p.level] ?? 0) + 1;
     });
     return counts;
@@ -399,43 +398,102 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     });
   }
 
-  // ── Arc-spine connections (all GGs → shared management ring → all sectors)
+  // ── Arc-spine connections (all GGs → sector ring → all sectors) ─────────
   function renderArcSpines() {
-    const color = levelColors[1];
+    const gmColor = levelColors[1];
 
-    // Stems: each GG → its point on the spine ring
+    // Stems: each GG → its touch point on the sector ring
     const stems = overviewGMs.map((gg) => {
-      const ggAngle  = Math.atan2(gg.y, gg.x);
-      const sp       = { x: SPINE_R * Math.cos(ggAngle), y: SPINE_R * Math.sin(ggAngle) };
+      const ggAngle = Math.atan2(gg.y, gg.x);
+      const sp      = { x: SPINE_R * Math.cos(ggAngle), y: SPINE_R * Math.sin(ggAngle) };
       const dx = sp.x - gg.x;
       const dy = sp.y - gg.y;
-      const d  = Math.sqrt(dx * dx + dy * dy);
-      const ggEdge = { x: gg.x + (dx / d) * gg.radius, y: gg.y + (dy / d) * gg.radius };
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ggEdge = { x: gg.x + (dx / dist) * gg.radius, y: gg.y + (dy / dist) * gg.radius };
       return (
         <line
           key={`${gg.id}-stem`}
           x1={ggEdge.x} y1={ggEdge.y}
           x2={sp.x} y2={sp.y}
-          stroke={color}
+          stroke={gmColor}
           strokeWidth={1.5}
-          strokeOpacity={0.5}
+          strokeOpacity={0.55}
         />
       );
     });
 
-    // Shared management ring
+    // Arcs along the sector ring: from each GG touch point → each sector node.
+    // Each arc visually "traverses" the ring to reach the sector.
+    const arcs: React.ReactNode[] = [];
+    overviewGMs.forEach((gg) => {
+      const ggAngle = Math.atan2(gg.y, gg.x);
+      const spX = SPINE_R * Math.cos(ggAngle);
+      const spY = SPINE_R * Math.sin(ggAngle);
+
+      overviewSectors.forEach((sector) => {
+        const sAngle = Math.atan2(sector.y, sector.x);
+        let dA = sAngle - ggAngle;
+        // Normalise to [-π, π] so we always take the shorter arc
+        while (dA >  Math.PI) dA -= 2 * Math.PI;
+        while (dA < -Math.PI) dA += 2 * Math.PI;
+
+        const largeArc = Math.abs(dA) > Math.PI ? 1 : 0;
+        const sweep    = dA > 0 ? 1 : 0;
+        const arcD = `M ${spX} ${spY} A ${SPINE_R} ${SPINE_R} 0 ${largeArc} ${sweep} ${sector.x} ${sector.y}`;
+
+        arcs.push(
+          <path
+            key={`${gg.id}-${sector.id}-arc`}
+            d={arcD}
+            fill="none"
+            stroke={sector.sectorColor ?? gmColor}
+            strokeWidth={1.4}
+            strokeOpacity={0.3}
+          />,
+        );
+      });
+    });
+
+    // Junction dots: where each GM stem meets the ring
+    const gmDots = overviewGMs.map((gg) => {
+      const ggAngle = Math.atan2(gg.y, gg.x);
+      return (
+        <circle
+          key={`${gg.id}-junc`}
+          cx={SPINE_R * Math.cos(ggAngle)}
+          cy={SPINE_R * Math.sin(ggAngle)}
+          r={3.5}
+          fill={gmColor}
+          fillOpacity={0.7}
+        />
+      );
+    });
+
+    // Junction dots: where each sector sits on the ring
+    const sectorDots = overviewSectors.map((sector) => (
+      <circle
+        key={`${sector.id}-sdot`}
+        cx={sector.x}
+        cy={sector.y}
+        r={4}
+        fill={sector.sectorColor ?? gmColor}
+        fillOpacity={0.65}
+      />
+    ));
+
+    // Base ring at low opacity as a subtle guide
     const ring = (
       <circle
         key="mgmt-ring"
         cx={0} cy={0} r={SPINE_R}
         fill="none"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeOpacity={0.45}
+        stroke={gmColor}
+        strokeWidth={1.2}
+        strokeOpacity={0.15}
       />
     );
 
-    return [...stems, ring];
+    return [ring, ...arcs, ...stems, ...gmDots, ...sectorDots];
   }
 
   // ── Legend entries ─────────────────────────────────────────────────────
@@ -445,17 +503,101 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
         .map(([lvl, name]) => [Number(lvl), name] as [number, string])
         .filter(([lvl]) => (lvl === 0 || lvl >= 3) && (levelCounts[lvl] ?? 0) > 0);
     }
-    return [[0, levelNames[0]], [1, levelNames[1]], [2, levelNames[2]]] as [number, string][];
+    // Panorama: mostra apenas níveis de pessoas (0 e 1); setores não são pessoas
+    return [[0, levelNames[0]], [1, levelNames[1]]] as [number, string][];
   }, [activeSectorId, levelNames, levelCounts]);
+
+  const sectorCount = useMemo(
+    () => (!activeSectorId ? positions.filter((p) => p.isSector).length : 0),
+    [activeSectorId, positions],
+  );
 
   const totalPeople = useMemo(() => {
     if (activeSectorId) {
       return Object.values(levelCounts).reduce((s, c) => s + c, 0);
     }
-    return allNodes.filter((n) => !n.isSector && n.level > 0).length;
+    return allNodes.filter((n) => !n.isSector).length;
   }, [activeSectorId, levelCounts, allNodes]);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // ── Beam intro animation (overview only, plays once on mount) ─────────
+  function renderBeamAnimation() {
+    return (
+      <g pointerEvents="none">
+        {/* Fade out the entire beam after 9 s */}
+        <animate
+          attributeName="opacity"
+          values="1;1;0"
+          keyTimes="0;0.84;1"
+          dur="9s"
+          fill="freeze"
+          repeatCount="1"
+        />
+
+        {/* Rotating beam, clipped to the expanding ring boundary */}
+        <g clipPath="url(#beam-reveal-clip)">
+          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+          {/* @ts-ignore — SMIL animateTransform */}
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from="0 0 0"
+            to="360 0 0"
+            dur="1.6s"
+            repeatCount="indefinite"
+          />
+          {/* Wide halo glow */}
+          <rect x={0} y={-22} width={485} height={44}
+            fill="url(#beam-sweep-grad)" opacity={0.28} filter="url(#beam-glow-filter)" />
+          {/* Medium glow */}
+          <rect x={0} y={-8} width={485} height={16}
+            fill="url(#beam-sweep-grad)" opacity={0.52} filter="url(#beam-glow-filter)" />
+          {/* Sharp core */}
+          <rect x={0} y={-1.5} width={485} height={3}
+            fill="url(#beam-sweep-grad)" />
+          {/* Bright tip */}
+          <circle cx={483} cy={0} r={3.5} fill="#ffffff" opacity={0.9} />
+        </g>
+
+        {/* Ring-pulse when beam reaches director ring */}
+        <circle cx={0} cy={0} r={90} fill="none" stroke="#C2410C" strokeWidth={2.5} opacity={0}>
+          <animate attributeName="opacity"
+            values="0;0;0.65;0;0"
+            keyTimes="0;0.06;0.12;0.27;1"
+            dur="9s" fill="freeze" repeatCount="1" />
+          <animate attributeName="r"
+            values="90;90;105;90;90"
+            keyTimes="0;0.06;0.15;0.27;1"
+            dur="9s" fill="freeze" repeatCount="1" />
+        </circle>
+
+        {/* Ring-pulse when beam reaches GM ring */}
+        <circle cx={0} cy={0} r={190} fill="none" stroke="#C2410C" strokeWidth={2} opacity={0}>
+          <animate attributeName="opacity"
+            values="0;0;0.55;0;0"
+            keyTimes="0;0.37;0.43;0.58;1"
+            dur="9s" fill="freeze" repeatCount="1" />
+          <animate attributeName="r"
+            values="190;190;208;190;190"
+            keyTimes="0;0.37;0.46;0.58;1"
+            dur="9s" fill="freeze" repeatCount="1" />
+        </circle>
+
+        {/* Ring-pulse when beam reaches sector ring */}
+        <circle cx={0} cy={0} r={430} fill="none" stroke="#C2410C" strokeWidth={2} opacity={0}>
+          <animate attributeName="opacity"
+            values="0;0;0.5;0;0"
+            keyTimes="0;0.70;0.76;0.86;1"
+            dur="9s" fill="freeze" repeatCount="1" />
+          <animate attributeName="r"
+            values="430;430;452;430;430"
+            keyTimes="0;0.70;0.78;0.86;1"
+            dur="9s" fill="freeze" repeatCount="1" />
+        </circle>
+      </g>
+    );
+  }
 
   if (!mounted) {
     return (
@@ -503,7 +645,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
                       <span className={styles.resultDot} style={{ background: n.isSector ? (n.sectorColor ?? levelColors[2]) : (levelColors[n.level] ?? '#94a3b8') }} />
                       <span className={styles.resultText}>
                         <span className={styles.resultName}>{n.name?.trim() || n.role}</span>
-                        <span className={styles.resultSub}>{n.isSector ? 'Setor' : (levelNames[n.level] ?? n.role)}</span>
+                        <span className={styles.resultSub}>{n.isSector ? (n.role || 'Setor') : (levelNames[n.level] ?? n.role)}</span>
                       </span>
                     </button>
                   </li>
@@ -557,7 +699,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
         </div>
         {!activeSectorId && (
           <div className={styles.legendHint}>
-            <span>Toque num setor para ver a equipe</span>
+            <span>{sectorCount} setor{sectorCount !== 1 ? 'es' : ''} · Toque para ver a equipe</span>
             <span>Arraste · 2 dedos ou scroll → zoom</span>
           </div>
         )}
@@ -586,6 +728,37 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
             <stop offset="0%" style={{ stopColor: 'var(--bg-surface)' }} />
             <stop offset="100%" style={{ stopColor: 'var(--bg-deep)' }} />
           </radialGradient>
+
+          {/* ── Beam intro animation defs ── */}
+          <clipPath id="beam-reveal-clip">
+            <circle cx={0} cy={0} r={0}>
+              {/* Expands: center → director ring (90) → GM ring (190) → sector ring (430) */}
+              <animate
+                attributeName="r"
+                values="0;95;95;195;195;440;440"
+                keyTimes="0;0.07;0.27;0.40;0.60;0.73;1"
+                dur="9s"
+                fill="freeze"
+                repeatCount="1"
+              />
+            </circle>
+          </clipPath>
+
+          <linearGradient id="beam-sweep-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="485" y2="0">
+            <stop offset="0%"   stopColor="#081437" stopOpacity="0"   />
+            <stop offset="14%"  stopColor="#C2410C" stopOpacity="0.2" />
+            <stop offset="58%"  stopColor="#C2410C" stopOpacity="0.72"/>
+            <stop offset="87%"  stopColor="#e8541a" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#ffffff"  stopOpacity="1"   />
+          </linearGradient>
+
+          <filter id="beam-glow-filter" x="-5%" y="-400%" width="110%" height="900%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
         {/* Background circle */}
@@ -607,6 +780,9 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
               ) : null;
             })
         }
+
+        {/* ── Beam intro (overview only) ────────────────────────────── */}
+        {!activeSectorId && renderBeamAnimation()}
 
         {/* ── OVERVIEW MODE ─────────────────────────────────────────── */}
         {!activeSectorId && (

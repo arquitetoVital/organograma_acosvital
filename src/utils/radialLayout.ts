@@ -95,14 +95,22 @@ export function calculateLayout(
   const result: PositionedNode[] = [];
   const START = -Math.PI / 2;
 
-  // Roots at center (depth 0)
-  const roots = nodes.filter((n) => n.parentId === null);
-  roots.forEach((root) => {
+  // When getDepth is provided, roots whose computed depth ≠ 0 should go into
+  // the BFS at their correct ring (e.g. orphaned GMs with parentId=null, level=1).
+  const allRoots = nodes.filter((n) => !n.parentId);
+  const trueRoots    = getDepth ? allRoots.filter((n) => getDepth(n, 0) === 0) : allRoots;
+  const orphanRoots  = getDepth ? allRoots.filter((n) => getDepth(n, 0) !== 0) : [];
+
+  // True roots at center
+  trueRoots.forEach((root) => {
     result.push({ ...root, x: 0, y: 0, angle: 0, radius: getNodeR(0) });
   });
 
-  // BFS for depth 1+
-  const level1 = roots.flatMap((r) => childrenOf.get(r.id) ?? []);
+  // BFS for depth 1+: children of true roots + orphaned roots treated as depth-1 nodes
+  const level1 = [
+    ...trueRoots.flatMap((r) => childrenOf.get(r.id) ?? []),
+    ...orphanRoots,
+  ];
   if (level1.length === 0) return result;
 
   const totalLeaves = level1.reduce((s, n) => s + countLeaves(n.id, childrenOf), 0);
@@ -138,6 +146,59 @@ export function calculateLayout(
       kc += ka;
     });
   }
+
+  return result;
+}
+
+// ── Overview layout (level-based even distribution) ───────────────────
+/**
+ * Places overview nodes evenly around their level ring.
+ * All nodes at the same level share the full 360°, independent of tree structure.
+ * This allows all sectors to spread evenly regardless of which GM they belong to,
+ * and ensures orphaned nodes (parentId=null) land on the correct ring by level.
+ */
+export function calculateOverviewLayout(
+  nodes: OrgNode[],
+  ringRadii: Record<number, number> = OVERVIEW_RING_RADII,
+  nodeRadii: Record<number, number> = OVERVIEW_NODE_RADIUS,
+): PositionedNode[] {
+  const START = -Math.PI / 2;
+  const result: PositionedNode[] = [];
+
+  const byLevel = new Map<number, OrgNode[]>();
+  nodes.forEach((n) => {
+    if (!byLevel.has(n.level)) byLevel.set(n.level, []);
+    byLevel.get(n.level)!.push(n);
+  });
+
+  const maxDefinedR = Math.max(...Object.keys(nodeRadii).map(Number));
+
+  [...byLevel.keys()].sort((a, b) => a - b).forEach((level) => {
+    const levelNodes = byLevel.get(level)!;
+    const r      = ringRadii[level] ?? 0;
+    const nodeR  = nodeRadii[level] ?? nodeRadii[maxDefinedR] ?? 8;
+    const count  = levelNodes.length;
+
+    if (r === 0) {
+      // Center ring (directors)
+      levelNodes.forEach((n) =>
+        result.push({ ...n, x: 0, y: 0, angle: 0, radius: nodeR }),
+      );
+      return;
+    }
+
+    const step = (2 * Math.PI) / count;
+    levelNodes.forEach((n, i) => {
+      const angle = START + step * i;
+      result.push({
+        ...n,
+        x: Math.cos(angle) * r,
+        y: Math.sin(angle) * r,
+        angle,
+        radius: nodeR,
+      });
+    });
+  });
 
   return result;
 }

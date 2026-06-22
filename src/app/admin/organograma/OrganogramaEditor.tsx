@@ -7,7 +7,7 @@ import NodeEditModal    from '@/components/Admin/modals/NodeEditModal';
 import AddSectorModal, { AddSubSectorModal } from '@/components/Admin/modals/AddSectorModal';
 import DirectorModal    from '@/components/Admin/modals/DirectorModal';
 import CreateManagerModal from '@/components/Admin/modals/CreateManagerModal';
-import { deleteOrgNode }  from '@/lib/orgApi';
+import { deleteOrgNode, updateOrgNode } from '@/lib/orgApi';
 import { countSectorMembers } from '@/lib/nodeUtils';
 import { useToast }         from '@/hooks/useToast';
 import { useSyncIds }       from '@/hooks/useSyncIds';
@@ -62,6 +62,7 @@ export default function OrganogramaEditor() {
   const [personBeingEdited,       setPersonBeingEdited]       = useState<OrgNode | null>(null);
   const [managerIdForNewSector,   setManagerIdForNewSector]   = useState<string | null>(null);
   const [sectorIdForNewSubSector, setSectorIdForNewSubSector] = useState<string | null>(null);
+  const [reassigningOrphan,       setReassigningOrphan]       = useState<OrgNode | null>(null);
 
   // ── Dados derivados ──────────────────────────────────────────────────────
   const nodeMap = useMemo(
@@ -81,6 +82,18 @@ export default function OrganogramaEditor() {
 
   const allSectors = useMemo(
     () => nodes.filter(n => n.isSector),
+    [nodes],
+  );
+
+  /** Todos os setores de nível 2. */
+  const allTopLevelSectors = useMemo(
+    () => allSectors.filter(s => s.level === 2),
+    [allSectors],
+  );
+
+  /** Nós que perderam o pai e estão pendentes de reatribuição (parentId vazio, level > 0). */
+  const orphanedNodes = useMemo(
+    () => nodes.filter(n => n.level > 0 && !n.parentId),
     [nodes],
   );
 
@@ -195,7 +208,7 @@ export default function OrganogramaEditor() {
 
     let message: string;
     if (isSector && hasChildren) {
-      message = `Excluir "${nodeLabel}" removerá toda a equipe e sub-setores abaixo. Essa ação não pode ser desfeita.`;
+      message = `Excluir "${nodeLabel}" manterá os sub-setores e pessoas abaixo como pendentes de reatribuição.`;
     } else if (!isSector && hasChildren) {
       message = `Excluir "${nodeLabel}" vai remover apenas esta pessoa. A equipe abaixo será promovida ao cargo superior automaticamente.`;
     } else {
@@ -222,6 +235,33 @@ export default function OrganogramaEditor() {
       },
     });
   }
+
+  // ── Targets elegíveis para reatribuição de nó órfão ─────────────────────
+  const orphanReassignTargets = useMemo((): OrgNode[] => {
+    if (!reassigningOrphan) return [];
+    // GM → precisa de uma diretoria como pai
+    if (reassigningOrphan.level === 1 && !reassigningOrphan.isSector) return directors;
+    // Setor → precisa de um GM como pai
+    if (reassigningOrphan.isSector && reassigningOrphan.level === 2) return generalManagers;
+    // Sub-setor → precisa de um setor como pai
+    if (reassigningOrphan.isSector) return allTopLevelSectors;
+    // Pessoa → qualquer setor ou sub-setor
+    return allSectors;
+  }, [reassigningOrphan, directors, generalManagers, allTopLevelSectors, allSectors]);
+
+  // ── Callback: ao criar diretoria, vincula GGs órfãos a ela ──────────────
+  const handleDirectorCreated = useCallback(async (newDirectorId: string) => {
+    const orphaned = nodes.filter(n => n.level === 1 && !n.isSector && !n.parentId);
+    if (orphaned.length === 0) return;
+    await Promise.all(orphaned.map(n => updateOrgNode(n.id, { parentId: newDirectorId })));
+  }, [nodes]);
+
+  // ── Callback: ao criar GG, vincula setores que ficaram sem gerente ───────
+  const handleManagerCreated = useCallback(async (newManagerId: string) => {
+    const orphaned = allTopLevelSectors.filter(s => !s.parentId);
+    if (orphaned.length === 0) return;
+    await Promise.all(orphaned.map(s => updateOrgNode(s.id, { parentId: newManagerId })));
+  }, [allTopLevelSectors]);
 
   // ── Props compartilhadas para todos os modais ────────────────────────────
   const sharedModalProps = {
@@ -325,13 +365,15 @@ export default function OrganogramaEditor() {
               )}
             </div>
 
-            {/* Cabeçalho da seção de Gerências Gerais */}
-            {directors.length > 0 && (
+            {/* ── Gerências Gerais ─────────────────────────────────── */}
+            {(directors.length > 0 || generalManagers.length > 0) && (
               <div className={styles.ggsSectionHeader}>
                 <span className={styles.ggsSectionTitle}>Gerências Gerais</span>
-                <button className={styles.addGGBtn} onClick={() => setIsAddManagerOpen(true)}>
-                  + Adicionar Gerente Geral
-                </button>
+                {directors.length > 0 && (
+                  <button className={styles.addGGBtn} onClick={() => setIsAddManagerOpen(true)}>
+                    + Adicionar Gerente Geral
+                  </button>
+                )}
               </div>
             )}
 
@@ -341,11 +383,10 @@ export default function OrganogramaEditor() {
               </div>
             )}
 
-            {/* Grid de Gerentes Gerais e seus Setores */}
-            <div className={styles.ggsGrid}>
-              {generalManagers.map(manager => {
-                const managerSectors = nodes.filter(n => n.level === 2 && n.parentId === manager.id && n.isSector);
-                return (
+            {/* Cards de GG */}
+            {generalManagers.length > 0 && (
+              <div className={styles.ggsGrid}>
+                {generalManagers.map(manager => (
                   <div
                     key={manager.id}
                     className={`${styles.ggCard} ${syncingIds.has(manager.id) ? styles.pending : ''} ${deletingIds.has(manager.id) ? styles.deleting : ''}`}
@@ -360,46 +401,106 @@ export default function OrganogramaEditor() {
                       <button className={styles.editIconBtn} onClick={() => setNodeBeingEdited(manager)} title="Editar GG">✏</button>
                       <button className={`${styles.editIconBtn} ${styles.dangerBtn}`} onClick={() => requestDeleteNode(manager.id, manager.name || manager.role)} title="Excluir GG">✕</button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-                    <div className={styles.divider} />
-
-                    <div className={styles.sectorList}>
-                      {managerSectors.length === 0 && (
-                        <span className={styles.noSectors}>Nenhum setor cadastrado</span>
+            {/* ── Seção unificada de Setores — visível sempre que houver setores ── */}
+            {(directors.length > 0 || allTopLevelSectors.length > 0) && (
+              <>
+                <div className={styles.ggsSectionHeader} style={{ marginTop: 8 }}>
+                  <span className={styles.ggsSectionTitle}>Setores</span>
+                  {directors.length > 0 && (
+                    <button
+                      className={styles.addGGBtn}
+                      onClick={() => setManagerIdForNewSector(
+                        generalManagers.length > 0 ? generalManagers[0].id : directors[0].id
                       )}
-                      {managerSectors.map(sector => {
-                        const memberCount   = countSectorMembers(sector.id, nodes);
-                        const isDrawerOpen  = openSectorId === sector.id;
-                        return (
-                          <div
-                            key={sector.id}
-                            className={`${styles.sectorRow} ${isDrawerOpen ? styles.sectorRowActive : ''} ${syncingIds.has(sector.id) ? styles.pending : ''} ${deletingIds.has(sector.id) ? styles.deleting : ''}`}
-                          >
-                            <button
-                              className={styles.sectorBtn}
-                              style={{ borderLeftColor: sector.sectorColor }}
-                              onClick={() => setOpenSectorId(isDrawerOpen ? null : sector.id)}
-                            >
-                              <span className={styles.sectorDot} style={{ background: sector.sectorColor }} />
-                              <span className={styles.sectorLabel}>{sector.name}</span>
-                              {syncingIds.has(sector.id)
-                                ? <span className={styles.syncSpinner} />
-                                : <span className={styles.sectorBadge}>{memberCount}</span>
-                              }
-                            </button>
-                            <button className={styles.editIconBtn} onClick={() => setNodeBeingEdited(sector)} title="Editar setor">✏</button>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <button className={styles.addSectorBtn} onClick={() => setManagerIdForNewSector(manager.id)}>
+                    >
                       + Novo setor
                     </button>
+                  )}
+                </div>
+
+                {allTopLevelSectors.length === 0 ? (
+                  <div className={styles.emptyGGs}>Nenhum setor cadastrado ainda.</div>
+                ) : (
+                  <div className={styles.sectorsUnifiedList}>
+                    {allTopLevelSectors.map(sector => {
+                      const memberCount  = countSectorMembers(sector.id, nodes);
+                      const isDrawerOpen = openSectorId === sector.id;
+                      return (
+                        <div
+                          key={sector.id}
+                          className={`${styles.sectorRow} ${isDrawerOpen ? styles.sectorRowActive : ''} ${syncingIds.has(sector.id) ? styles.pending : ''} ${deletingIds.has(sector.id) ? styles.deleting : ''}`}
+                        >
+                          <button
+                            className={styles.sectorBtn}
+                            style={{ borderLeftColor: sector.sectorColor }}
+                            onClick={() => setOpenSectorId(isDrawerOpen ? null : sector.id)}
+                          >
+                            <span className={styles.sectorDot} style={{ background: sector.sectorColor }} />
+                            <span className={styles.sectorLabel}>{sector.name}</span>
+                            {syncingIds.has(sector.id)
+                              ? <span className={styles.syncSpinner} />
+                              : <span className={styles.sectorBadge}>{memberCount}</span>
+                            }
+                          </button>
+                          <button
+                            className={styles.editIconBtn}
+                            title="Editar setor"
+                            onClick={() => setNodeBeingEdited(sector)}
+                          >✏</button>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </>
+            )}
+
+            {/* ── Pendentes de Reatribuição ────────────────────────── */}
+            {orphanedNodes.length > 0 && (
+              <>
+                <div className={styles.ggsSectionHeader} style={{ marginTop: 8 }}>
+                  <span className={`${styles.ggsSectionTitle} ${styles.pendingTitle}`}>
+                    Pendentes de Reatribuição
+                  </span>
+                  <span className={styles.pendingCount}>{orphanedNodes.length}</span>
+                </div>
+                <div className={styles.sectorsUnifiedList}>
+                  {orphanedNodes.map(node => {
+                    const typeLabel = node.isSector
+                      ? (node.level === 2 ? 'Setor' : (node.role || 'Sub-setor'))
+                      : (levelNames[node.level] ?? node.role);
+                    const color = node.sectorColor ?? (node.isSector ? '#fbbf24' : (levelColors[node.level] ?? '#94a3b8'));
+                    return (
+                      <div
+                        key={node.id}
+                        className={`${styles.sectorRow} ${styles.pendingRow} ${syncingIds.has(node.id) ? styles.pending : ''} ${deletingIds.has(node.id) ? styles.deleting : ''}`}
+                      >
+                        <div className={styles.sectorBtn} style={{ borderLeftColor: color }}>
+                          <span className={styles.sectorDot} style={{ background: color }} />
+                          <span className={styles.sectorLabel}>{node.name || <em>Sem nome</em>}</span>
+                          <span className={styles.pendingTypeBadge}>{typeLabel}</span>
+                        </div>
+                        <button
+                          className={styles.editIconBtn}
+                          title="Reatribuir"
+                          onClick={() => setReassigningOrphan(node)}
+                        >↔</button>
+                        <button
+                          className={`${styles.editIconBtn} ${styles.dangerBtn}`}
+                          title="Excluir"
+                          onClick={() => requestDeleteNode(node.id, node.name || 'este item')}
+                        >✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -545,6 +646,73 @@ export default function OrganogramaEditor() {
         />
       )}
 
+      {/* ── Modal de reatribuição de nó órfão ───────────────────────────── */}
+      {reassigningOrphan && (
+        <div className={styles.overlay} onClick={() => setReassigningOrphan(null)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <h2>Reatribuir {
+                !reassigningOrphan.isSector && reassigningOrphan.level === 1 ? 'Gerência Geral' :
+                reassigningOrphan.isSector && reassigningOrphan.level === 2 ? 'Setor' :
+                reassigningOrphan.isSector ? (reassigningOrphan.role || 'Sub-setor') :
+                (levelNames[reassigningOrphan.level] ?? 'Pessoa')
+              }</h2>
+              <button type="button" className={styles.closeBtn} onClick={() => setReassigningOrphan(null)}>✕</button>
+            </div>
+            <p className={styles.orphanModalSubtitle}>
+              Mover <strong>{reassigningOrphan.name || 'este item'}</strong> para:
+            </p>
+            <div className={styles.gmPickerList}>
+              {orphanReassignTargets.length === 0 ? (
+                <p className={styles.orphanEmpty}>
+                  {reassigningOrphan.level === 1 && !reassigningOrphan.isSector
+                    ? 'Nenhuma diretoria disponível. Crie uma primeiro.'
+                    : reassigningOrphan.level === 2
+                    ? 'Nenhum Gerente Geral disponível. Crie um primeiro.'
+                    : reassigningOrphan.isSector
+                    ? 'Nenhum setor disponível.'
+                    : 'Nenhum setor ou sub-setor disponível.'}
+                </p>
+              ) : (
+                orphanReassignTargets.map(target => (
+                  <button
+                    key={target.id}
+                    type="button"
+                    className={styles.gmPickerBtn}
+                    onClick={async () => {
+                      const node = reassigningOrphan;
+                      setReassigningOrphan(null);
+                      markSyncing(node.id);
+                      try {
+                        await updateOrgNode(node.id, { parentId: target.id });
+                        await refreshNodes();
+                        showToast(`"${node.name || 'Item'}" reatribuído com sucesso.`);
+                      } catch (err) {
+                        showToast(err instanceof Error ? err.message : 'Erro ao reatribuir.', 'error');
+                      } finally {
+                        unmarkSyncing(node.id);
+                      }
+                    }}
+                  >
+                    <Avatar
+                      photoUrl={target.photoUrl ?? ''}
+                      name={target.name}
+                      size={32}
+                      color={target.isSector ? (target.sectorColor ?? levelColors[2]) : levelColors[1]}
+                    />
+                    <span className={styles.gmPickerName}>{target.name || target.role}</span>
+                    {target.name && <span className={styles.gmPickerRole}>{target.role}</span>}
+                  </button>
+                ))
+              )}
+            </div>
+            <div className={styles.modalFoot}>
+              <button type="button" className={styles.btnSecondary} onClick={() => setReassigningOrphan(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sectorIdForNewSubSector !== null && (() => {
         const parentSector = nodeMap.get(sectorIdForNewSubSector);
         return (
@@ -564,6 +732,7 @@ export default function OrganogramaEditor() {
           allSectors={allSectors}
           onClose={() => { setIsAddDirectorOpen(false); setDirectorBeingEdited(null); }}
           onDeleteClick={requestDeleteNode}
+          onDirectorCreated={handleDirectorCreated}
           {...sharedModalProps}
         />
       )}
@@ -572,6 +741,7 @@ export default function OrganogramaEditor() {
         <CreateManagerModal
           directors={directors}
           onClose={() => setIsAddManagerOpen(false)}
+          onManagerCreated={handleManagerCreated}
           {...sharedModalProps}
         />
       )}

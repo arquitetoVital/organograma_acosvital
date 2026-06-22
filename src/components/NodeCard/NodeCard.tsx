@@ -61,7 +61,7 @@ function NodeCardInner({ node, color, vbW }: Props) {
 
       {/* Initials fallback */}
       {!showImage && (
-        <text x={0} y={r * 0.4} textAnchor="middle" fill={color} fontSize={r * 0.52} fontWeight="700" fontFamily={FONT}>
+        <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={r * 0.52} fontWeight="700" fontFamily={FONT}>
           {getInitials(node.name)}
         </text>
       )}

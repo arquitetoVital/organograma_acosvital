@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import OrgChart from '@/components/OrgChart/OrgChart';
 import {
-  calculateLayout, calculateConnections,
+  calculateOverviewLayout, calculateConnections,
   OVERVIEW_RING_RADII, OVERVIEW_NODE_RADIUS,
 } from '@/utils/radialLayout';
 import type { OrgNode } from '@/types/orgChart';
@@ -23,7 +23,9 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
     [nodes],
   );
   const positions = useMemo(
-    () => calculateLayout(overviewNodes, OVERVIEW_RING_RADII, OVERVIEW_NODE_RADIUS),
+    // Distribute each level evenly across the full 360°, independent of tree structure.
+    // Sectors spread around the full sector ring; orphaned nodes land on their correct ring by level.
+    () => calculateOverviewLayout(overviewNodes, OVERVIEW_RING_RADII, OVERVIEW_NODE_RADIUS),
     [overviewNodes],
   );
   const connections = useMemo(() => calculateConnections(positions), [positions]);

@@ -278,6 +278,28 @@
 .emptySetupTitle { font-size: 16px; font-weight: 700; color: #f1f5f9; margin: 0; }
 .emptySetupText  { font-size: 13px; color: #64748b; margin: 0; max-width: 380px; }
 
+/* ── Sectors unified list ── */
+.sectorsUnifiedList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Pending orphan nodes ── */
+.pendingTitle { color: #fbbf24; }
+.pendingCount { font-size: 12px; background: rgba(251,191,36,.15); color: #fbbf24; border-radius: 10px; padding: 2px 8px; font-weight: 700; }
+.pendingRow { opacity: .85; }
+.pendingTypeBadge { font-size: 10px; color: #94a3b8; background: rgba(148,163,184,.1); border: 1px solid rgba(148,163,184,.2); border-radius: 8px; padding: 1px 7px; font-weight: 600; flex-shrink: 0; }
+.orphanModalSubtitle { font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+.orphanEmpty { font-size: 13px; color: #475569; text-align: center; padding: 16px 0; }
+
+/* ── GM / orphan picker ── */
+.gmPickerList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.gmPickerBtn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; cursor: pointer; text-align: left; transition: background .12s, border-color .12s; width: 100%; }
+.gmPickerBtn:hover:not(:disabled) { background: #1e293b; border-color: #334155; }
+.gmPickerName { font-size: 14px; font-weight: 600; color: #e2e8f0; flex: 1; }
+.gmPickerRole { font-size: 11px; color: #475569; }
+
 /* ── GGs section header ── */
 .ggsSectionHeader {
   display: flex;
