@@ -34,6 +34,10 @@ interface Props {
   focusedId?: number | null;
   /** Oculta a citação lateral e a barra de stats — usado quando o painel lateral assume a contagem. */
   hideInfoOverlays?: boolean;
+  /** Oculta o título e o painel de controles — usado em modo tela cheia. */
+  hideControls?: boolean;
+  /** Desloca o centro do globo horizontalmente (0 = centro, 0.25 = 25% para direita). */
+  xShift?: number;
 }
 
 interface CityProps { name: string; capital: boolean; pop: number; rank: number }
@@ -111,7 +115,7 @@ const MAX_HUB_ARCS = 40;     // cap on pairwise arcs to avoid O(n²) draw cost
 const RESET_LON = 50;
 const RESET_LAT = 18;
 
-export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focusTarget, focusedId, hideInfoOverlays }: Props) {
+export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focusTarget, focusedId, hideInfoOverlays, hideControls, xShift = 0 }: Props) {
   const canvasRef       = useRef<HTMLCanvasElement>(null);
   const rotLonRef       = useRef(RESET_LON);
   const rotLatRef       = useRef(RESET_LAT);
@@ -163,7 +167,6 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
   const [zoom, setZoom]         = useState(1);
   const [mounted, setMounted]   = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const introStartRef = useRef(0);
   const [tooltip, setTooltip]   = useState<{ x: number; y: number; count: number; city: string } | null>(null);
   const biomeGroupsRef = useRef<{ fill: string; features: GeoPermissibleObjects[] }[]>([]);
@@ -174,15 +177,8 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
 
   // ── Precompute per-frame-expensive data whenever points change ──
   useEffect(() => {
-    // Vital theme: proximity grouping (was rebuilt every frame — now O(n) once)
-    const map = new Map<string, { lat: number; lon: number; ids: number[] }>();
-    for (const p of points) {
-      const key = `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
-      const g = map.get(key);
-      if (g) g.ids.push(p.id);
-      else map.set(key, { lat: p.lat, lon: p.lon, ids: [p.id] });
-    }
-    precomputedGroupsRef.current = Array.from(map.values());
+    // Vital theme: cada ponto renderizado individualmente (sem agrupamento)
+    precomputedGroupsRef.current = points.map(p => ({ lat: p.lat, lon: p.lon, ids: [p.id] }));
 
     // Hub theme: pairwise arc list capped at MAX_HUB_ARCS (was O(n²) every frame)
     const pairs: typeof hubArcsRef.current = [];
@@ -322,7 +318,7 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
     const W   = cv.clientWidth;
     const H   = cv.clientHeight;
     if (!W || !H) return; // canvas not yet laid out
-    const cx  = W / 2;
+    const cx  = W * (0.5 + xShift);
     const cy  = H / 2;
     // Intro animation — ease-out cubic over 2.5 s, starts when globe first becomes ready
     if (ready && introStartRef.current === 0) introStartRef.current = timestamp;
@@ -963,7 +959,7 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
         ctx.fillStyle = '#fff'; ctx.fill();
       }
     }
-  }, [ready, theme]);
+  }, [ready, theme, xShift]);
 
   // ── Resize canvas buffer to match CSS size × device pixel ratio ──
   useEffect(() => {
@@ -1042,12 +1038,6 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
     return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
   }, [draw]);
 
-  // ── Track fullscreen changes ──
-  useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', handler);
-    return () => document.removeEventListener('fullscreenchange', handler);
-  }, []);
 
   // ── Pointer / touch + zoom events ──
   useEffect(() => {
@@ -1267,13 +1257,6 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
     isResettingRef.current = true;
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
-  }, []);
 
   return (
     <div className={styles.wrapper}>
@@ -1305,37 +1288,20 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
       {mounted && (
         <>
           {/* Title overlay */}
-          <div className={styles.titleOverlay}>
-            <div className={styles.titleTag}>
-              {theme === 'vital' ? 'Aços Vital · Clientes' : 'Aços Hub · Visualização'}
+          {!hideControls && (
+            <div className={styles.titleOverlay}>
+              <div className={styles.titleTag}>
+                {theme === 'vital' ? 'Aços Vital · Clientes' : 'Aços Hub · Visualização'}
+              </div>
+              <div className={styles.titleMain}>
+                {theme === 'vital' ? 'Mapa de\nClientes' : 'Globo\nInterativo'}
+              </div>
+              <div className={styles.titleHint}>Arraste · Scroll · Dia/noite em tempo real</div>
             </div>
-            <div className={styles.titleMain}>
-              {theme === 'vital' ? 'Mapa de\nClientes' : 'Globo\nInterativo'}
-            </div>
-            <div className={styles.titleHint}>Arraste · Scroll · Dia/noite em tempo real</div>
-          </div>
+          )}
 
           {/* ── Control panel — all actions in one organized strip ── */}
-          <div className={styles.controlPanel}>
-            {/* Fullscreen */}
-            <button
-              className={`${styles.panelBtn} ${isFullscreen ? styles.panelBtnActive : ''}`}
-              onClick={toggleFullscreen}
-              title={isFullscreen ? 'Sair do modo tela cheia' : 'Tela cheia'}
-            >
-              {isFullscreen ? (
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1H4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h3.5a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5zM0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0V12a.5.5 0 0 0-.5-.5H.5a.5.5 0 0 1-.5-.5zm10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1H12a.5.5 0 0 0-.5.5v3.5a.5.5 0 0 1-1 0v-3.5z"/>
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 1h4a.5.5 0 0 1 0 1H2v3.5a.5.5 0 0 1-1 0V1.5A.5.5 0 0 1 1.5 1zm9 0h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V2h-3.5a.5.5 0 0 1 0-1zm-9 9a.5.5 0 0 1 .5.5V14h3.5a.5.5 0 0 1 0 1H1.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5zm13 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H11a.5.5 0 0 1 0-1h3.5v-3.5a.5.5 0 0 1 .5-.5z"/>
-                </svg>
-              )}
-            </button>
-
-            <div className={styles.panelDivider} />
-
+          {!hideControls && <div className={styles.controlPanel}>
             {/* Auto-rotate toggle */}
             <button
               className={`${styles.panelBtn} ${autoRotate ? styles.panelBtnActive : ''}`}
@@ -1397,7 +1363,7 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
               disabled={zoom <= ZOOM_MIN}
               title="Zoom out"
             >−</button>
-          </div>
+          </div>}
 
           {/* Side text — left center, hidden when zoomed in or not vital theme */}
           {theme === 'vital' && !hideInfoOverlays && <div className={`${styles.sideText} ${zoom > 1 ? styles.sideTextHidden : ''}`}>

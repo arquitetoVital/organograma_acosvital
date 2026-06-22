@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import GlobeCanvas, { type DotGroup, type GlobeTheme } from '@/components/Globe/GlobeCanvas';
 import GlobePanel, { type RegionFilter } from '@/components/Globe/GlobePanel';
 import { type ClientPoint, toGlobePoint } from '@/types/client';
 import { regionFromAddress, type RegionKey } from '@/lib/regions';
+import { LOGO_URL } from '@/lib/constants';
 import styles from './GlobeExplorer.module.css';
 
 interface Props {
@@ -25,6 +26,13 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
   const [panelOpen, setPanel] = useState(true);
   const [focus, setFocus]     = useState<{ lat: number; lon: number; nonce: number } | null>(null);
   const [selected, setSelected] = useState<ClientPoint | null>(null);
+  const [isFs, setIsFs]       = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
 
   const accent = theme === 'vital' ? '#ef4444' : '#f97316';
 
@@ -90,28 +98,45 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
           focusTarget={focus}
           focusedId={focusedId}
           hideInfoOverlays
+          hideControls={isFs}
+          xShift={isFs ? 0.22 : 0}
         />
 
-        {loading && (
+        {loading && !isFs && (
           <div className={styles.loadingBadge}>
             <span className={styles.loadingDot} />
             {loadingText}
           </div>
         )}
 
-        <button
-          type="button"
-          className={styles.panelToggle}
-          style={{ background: accent }}
-          onClick={togglePanel}
-          aria-label={panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
-          title={panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
-        >
-          {panelOpen ? '›' : '‹'}
-        </button>
+        {!isFs && (
+          <button
+            type="button"
+            className={styles.panelToggle}
+            style={{ background: accent }}
+            onClick={togglePanel}
+            aria-label={panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
+            title={panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
+          >
+            {panelOpen ? '›' : '‹'}
+          </button>
+        )}
+
+        {isFs && theme === 'vital' && (
+          <div className={styles.fsOverlay}>
+            <img src={LOGO_URL} alt="Açosvital" className={styles.fsLogo} />
+            <p className={styles.fsLabel}>ONDE JÁ ESTAMOS</p>
+            <p className={styles.fsQuote}>
+              Nosso futuro é crescer com propósito, inovação<br />
+              e excelência, construindo caminhos cada vez<br />
+              maiores e levando nossa visão mais longe<br />
+              a cada conquista.
+            </p>
+          </div>
+        )}
       </div>
 
-      {panelOpen && (
+      {panelOpen && !isFs && (
         <GlobePanel
           itemLabel={itemLabel}
           total={points.length}

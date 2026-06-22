@@ -35,7 +35,6 @@ export default function GlobeCanvasThree({
   const [mounted, setMounted] = useState(false);
   const [zoomPct, setZoomPct] = useState(100);
   const [autoRotate, setAutoRotate] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; count: number; city: string } | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -80,12 +79,6 @@ export default function GlobeCanvasThree({
     setAutoRotate(false);
   }, [focusTarget]);
 
-  // ── fullscreen tracking ──
-  useEffect(() => {
-    const h = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', h);
-    return () => document.removeEventListener('fullscreenchange', h);
-  }, []);
 
   const toggleAutoRotate = useCallback(() => {
     const on = sceneRef.current?.toggleAutoRotate() ?? false;
@@ -107,10 +100,6 @@ export default function GlobeCanvasThree({
     a.click();
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-    else document.exitFullscreen().catch(() => {});
-  }, []);
 
   const displayPoints = mounted ? points.length : 0;
 
@@ -142,24 +131,6 @@ export default function GlobeCanvasThree({
           </div>
 
           <div className={styles.controlPanel}>
-            <button
-              className={`${styles.panelBtn} ${isFullscreen ? styles.panelBtnActive : ''}`}
-              onClick={toggleFullscreen}
-              title={isFullscreen ? 'Sair do modo tela cheia' : 'Tela cheia'}
-            >
-              {isFullscreen ? (
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1H4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h3.5a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5zM0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0V12a.5.5 0 0 0-.5-.5H.5a.5.5 0 0 1-.5-.5zm10 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1H12a.5.5 0 0 0-.5.5v3.5a.5.5 0 0 1-1 0v-3.5z"/>
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 1h4a.5.5 0 0 1 0 1H2v3.5a.5.5 0 0 1-1 0V1.5A.5.5 0 0 1 1.5 1zm9 0h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V2h-3.5a.5.5 0 0 1 0-1zm-9 9a.5.5 0 0 1 .5.5V14h3.5a.5.5 0 0 1 0 1H1.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5zm13 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H11a.5.5 0 0 1 0-1h3.5v-3.5a.5.5 0 0 1 .5-.5z"/>
-                </svg>
-              )}
-            </button>
-
-            <div className={styles.panelDivider} />
-
             <button
               className={`${styles.panelBtn} ${autoRotate ? styles.panelBtnActive : ''}`}
               onClick={toggleAutoRotate}
