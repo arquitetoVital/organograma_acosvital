@@ -459,21 +459,22 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     // ── 4. Full 360° around GM ring — sweeps through ALL GM nodes ──
     parts.push(...ring360(GM_R, gmAngle));
 
-    // ── 5. Radial stem outward to sector ring ──
-    parts.push(`L ${f(SEC_R * Math.cos(gmAngle))},${f(SEC_R * Math.sin(gmAngle))}`);
-
-    // ── 6. Full 360° around sector ring — sweeps through ALL sector nodes ──
-    parts.push(...ring360(SEC_R, gmAngle));
+    // ── 5 & 6. Sector ring — only if there are sectors ──
+    const hasSectors = overviewSectors.length > 0;
+    if (hasSectors) {
+      parts.push(`L ${f(SEC_R * Math.cos(gmAngle))},${f(SEC_R * Math.sin(gmAngle))}`);
+      parts.push(...ring360(SEC_R, gmAngle));
+    }
 
     const dynPath = parts.join(' ');
 
-    // Path length: dir(578) + small arc + connector(~98) + GM ring(1194) + stem(240) + sec ring(2702)
+    // Path length: dir + arc + connector + GM ring + (stem + sec ring if sectors exist)
     const dirLen  = PI2 * DR;
     const arcLen  = dToGM * DR;
     const connLen = GM_R - DR;
     const gmLen   = PI2 * GM_R;
-    const stemLen = SEC_R - GM_R;
-    const secLen  = PI2 * SEC_R;
+    const stemLen = hasSectors ? SEC_R - GM_R : 0;
+    const secLen  = hasSectors ? PI2 * SEC_R  : 0;
     const TOTAL   = Math.round(dirLen + arcLen + connLen + gmLen + stemLen + secLen);
 
     const DRAW = '15s';
