@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Avatar from '@/components/ui/Avatar';
 import PersonModal      from '@/components/Admin/modals/PersonModal';
 import NodeEditModal    from '@/components/Admin/modals/NodeEditModal';
@@ -33,6 +33,16 @@ interface SectorDrawerData {
   directMembersByLevel: Record<number, OrgNode[]>;
 }
 
+/**
+ * Chave em localStorage que marca uma importação do RH em andamento.
+ * Guarda o timestamp de início; é removida ao concluir/cancelar/falhar.
+ * Sobrevive a F5: se a página recarregar no meio da importação, o marcador
+ * permanece e a importação (idempotente) é retomada no próximo mount.
+ */
+const IMPORT_FLAG_KEY = 'org:importing';
+/** Janela de validade do marcador — evita retomar uma importação muito antiga. */
+const IMPORT_RESUME_WINDOW_MS = 15 * 60 * 1000;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Componente principal
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,8 +54,10 @@ interface SectorDrawerData {
  */
 export default function OrganogramaEditor() {
   // ── Dados ────────────────────────────────────────────────────────────────
-  const [nodes,     setNodes]     = useState<OrgNode[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [nodes,       setNodes]       = useState<OrgNode[]>([]);
+  const [isLoading,   setIsLoading]   = useState(true);
+  const [isImporting, setIsImporting] = useState(false);
+  const importAbortRef = useRef<AbortController | null>(null);
 
   // ── Hooks reutilizáveis ──────────────────────────────────────────────────
   const { toast,         showToast }         = useToast();
@@ -263,6 +275,68 @@ export default function OrganogramaEditor() {
     await Promise.all(orphaned.map(s => updateOrgNode(s.id, { parentId: newManagerId })));
   }, [allTopLevelSectors]);
 
+  // ── Importação do RH ─────────────────────────────────────────────────────
+  const handleImportFromRH = useCallback(async () => {
+    const controller = new AbortController();
+    importAbortRef.current = controller;
+    setIsImporting(true);
+    // Marca a importação como em andamento — sobrevive a F5 para ser retomada.
+    try { window.localStorage.setItem(IMPORT_FLAG_KEY, String(Date.now())); } catch {}
+    try {
+      const res = await fetch('/api/org/import', { method: 'POST', signal: controller.signal });
+      const data: unknown = await res.json();
+      if (!res.ok) {
+        const err = data as { error?: string };
+        showToast(err.error ?? 'Erro ao importar.', 'error');
+        return;
+      }
+      const result = data as { created: number; updated: number; skipped: number; orphans: number; diagnostics: { funcionarios: number; cargos: number; setores: number } };
+      await refreshNodes();
+      const d = result.diagnostics;
+      const orphanNote = result.orphans > 0 ? ` (${result.orphans} sem setor)` : '';
+      showToast(
+        `Importação concluída: ${result.created} criados, ${result.updated} atualizados, ${result.skipped} erros${orphanNote}. [RH: ${d.funcionarios} func / ${d.cargos} cargos / ${d.setores} setores]`
+      );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // Cancelado pelo usuário. O servidor pode já ter gravado parte dos nós,
+        // então recarregamos para refletir o estado real.
+        await refreshNodes();
+        showToast('Importação cancelada.', 'error');
+      } else {
+        showToast('Erro de rede ao importar.', 'error');
+      }
+    } finally {
+      try { window.localStorage.removeItem(IMPORT_FLAG_KEY); } catch {}
+      importAbortRef.current = null;
+      setIsImporting(false);
+    }
+  }, [refreshNodes, showToast]);
+
+  const handleCancelImport = useCallback(() => {
+    importAbortRef.current?.abort();
+  }, []);
+
+  // Retoma uma importação interrompida por F5/reload (marcador no localStorage).
+  // O import é idempotente, então re-executar conclui com segurança o que faltou.
+  const resumeCheckedRef = useRef(false);
+  useEffect(() => {
+    if (resumeCheckedRef.current) return;
+    resumeCheckedRef.current = true;
+
+    let startedAt: string | null = null;
+    try { startedAt = window.localStorage.getItem(IMPORT_FLAG_KEY); } catch {}
+    if (!startedAt) return;
+
+    const isFresh = Date.now() - Number(startedAt) < IMPORT_RESUME_WINDOW_MS;
+    if (isFresh) {
+      showToast('Retomando importação do RH interrompida…');
+      void handleImportFromRH();
+    } else {
+      try { window.localStorage.removeItem(IMPORT_FLAG_KEY); } catch {}
+    }
+  }, [handleImportFromRH, showToast]);
+
   // ── Props compartilhadas para todos os modais ────────────────────────────
   const sharedModalProps = {
     setNodes,
@@ -289,7 +363,7 @@ export default function OrganogramaEditor() {
           <LoadingSkeleton />
         ) : (
           <>
-            {/* Barra de estatísticas */}
+            {/* Barra de estatísticas + importação */}
             <div className={styles.statsBar}>
               <div className={styles.statTotal}>
                 <span className={styles.statTotalNum}>{orgStats.total}</span>
@@ -307,6 +381,24 @@ export default function OrganogramaEditor() {
                     </div>
                   ))}
               </div>
+              <div className={styles.statsBarDivider} />
+              <button
+                className={styles.importRhBtn}
+                onClick={handleImportFromRH}
+                disabled={isImporting}
+                title="Importa funcionários da tabela de RH e cria/atualiza nós no organograma"
+              >
+                {isImporting ? 'Importando…' : 'Importar do RH'}
+              </button>
+              {isImporting && (
+                <button
+                  className={styles.cancelImportBtn}
+                  onClick={handleCancelImport}
+                  title="Cancelar a importação em andamento"
+                >
+                  Cancelar
+                </button>
+              )}
             </div>
 
             {/* Seção de Diretorias */}
@@ -314,9 +406,9 @@ export default function OrganogramaEditor() {
               <div className={styles.directorSectionHead}>
                 <span className={styles.directorSectionTag}>DIRETORIA</span>
                 {directors.length > 0 && (
-                  <button className={styles.addDirectorBtn} onClick={() => setIsAddDirectorOpen(true)}>
-                    + Adicionar
-                  </button>
+                  <span className={styles.directorSectionHint} title="Só existe uma Diretoria central. Diretores adicionais entram como Diretor de Setor.">
+                    Centro único — diretores extras viram Diretor de Setor
+                  </span>
                 )}
               </div>
 
@@ -332,8 +424,7 @@ export default function OrganogramaEditor() {
               ) : (
                 <div className={styles.directorsGrid}>
                   {directors.map(director => {
-                    const isShared       = director.name.includes(' & ');
-                    const assignedSector = director.sectorDirectorOf ? nodeMap.get(director.sectorDirectorOf) : null;
+                    const isShared = director.name.includes(' & ');
                     return (
                       <div
                         key={director.id}
@@ -342,11 +433,7 @@ export default function OrganogramaEditor() {
                         <Avatar photoUrl={director.photoUrl ?? ''} name={director.name} size={52} color={levelColors[0]} />
                         <div className={styles.directorText}>
                           <span className={styles.directorTag}>
-                            {assignedSector
-                              ? <span className={styles.directorTagSector} style={{ borderColor: assignedSector.sectorColor ?? '#a78bfa' }}>
-                                  SETOR: {assignedSector.name.toUpperCase()}
-                                </span>
-                              : isShared ? '👫 COMPARTILHADO' : 'CENTRAL'}
+                            {isShared ? '👫 COMPARTILHADO' : 'CENTRAL'}
                           </span>
                           <span className={styles.directorName}>
                             {director.name || <em className={styles.noName}>Sem nome</em>}
@@ -719,7 +806,6 @@ export default function OrganogramaEditor() {
           <AddSubSectorModal
             parentSectorId={sectorIdForNewSubSector}
             parentSectorName={parentSector?.name}
-            parentSectorLevel={parentSector?.level ?? 2}
             onClose={() => setSectorIdForNewSubSector(null)}
             {...sharedModalProps}
           />
@@ -729,7 +815,7 @@ export default function OrganogramaEditor() {
       {(isAddDirectorOpen || directorBeingEdited !== null) && (
         <DirectorModal
           directorBeingEdited={directorBeingEdited}
-          allSectors={allSectors}
+          centralDirectorExists={directors.length > 0}
           onClose={() => { setIsAddDirectorOpen(false); setDirectorBeingEdited(null); }}
           onDeleteClick={requestDeleteNode}
           onDirectorCreated={handleDirectorCreated}

@@ -10,13 +10,14 @@ export const OVERVIEW_RING_RADII: Record<number, number> = {
 // ── Sector detail ring radii (BFS depth from sector node) ─────────────
 export const SECTOR_RING_RADII: Record<number, number> = {
   0: 0,     // sector card (center)
-  1: 150,   // Gerente de Setor
-  2: 300,   // Coordenadores
-  3: 475,   // Supervisores
-  4: 665,   // Líderes
-  5: 875,   // Analistas
-  6: 1105,  // Assistentes
-  7: 1345,  // Aprendizes
+  1: 150,   // Diretor de Setor  (level 4)
+  2: 300,   // Gerente de Setor  (level 5)
+  3: 475,   // Coordenadores     (level 6)
+  4: 665,   // Supervisores      (level 7)
+  5: 875,   // Líderes           (level 8)
+  6: 1105,  // Analistas         (level 9)
+  7: 1345,  // Assistentes       (level 10)
+  8: 1590,  // Aprendizes        (level 11)
 };
 
 // ── Node visual radii for overview ────────────────────────────────────

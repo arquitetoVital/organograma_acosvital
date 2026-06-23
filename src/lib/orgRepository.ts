@@ -17,29 +17,29 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 /** Formato exato de uma linha na tabela `organograma.org_nodes`. */
 type DbRow = {
-  id:                 string;
-  name:               string;
-  role:               string;
-  level:              number;
-  parent_id:          string | null;
-  is_sector:          boolean;
-  photo_url:          string | null;
-  sector_color:       string | null;
-  sector_director_of: string | null;
+  id:              string;
+  name:            string;
+  role:            string;
+  level:           number;
+  parent_id:       string | null;
+  is_sector:       boolean;
+  photo_url:       string | null;
+  sector_color:    string | null;
+  funcionario_id?: string | null;
 };
 
 /** Converte uma linha do banco para o modelo de domínio. */
 function rowToNode(row: DbRow): OrgNode {
   return {
-    id:               row.id,
-    name:             row.name             ?? '',
-    role:             row.role             ?? '',
-    level:            row.level,
-    parentId:         row.parent_id        ?? null,
-    isSector:         row.is_sector        ?? false,
-    photoUrl:         row.photo_url        ?? undefined,
-    sectorColor:      row.sector_color     ?? undefined,
-    sectorDirectorOf: row.sector_director_of ?? null,
+    id:            row.id,
+    name:          row.name          ?? '',
+    role:          row.role          ?? '',
+    level:         row.level,
+    parentId:      row.parent_id     ?? null,
+    isSector:      row.is_sector     ?? false,
+    photoUrl:      row.photo_url     ?? undefined,
+    sectorColor:   row.sector_color  ?? undefined,
+    funcionarioId: row.funcionario_id ?? null,
   };
 }
 
@@ -51,14 +51,52 @@ const table = (supabase: SupabaseClient) =>
 // Leitura
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Retorna todos os nós do organograma ordenados por nível (raiz primeiro). */
+/**
+ * Retorna TODOS os nós do organograma ordenados por nível (raiz primeiro).
+ *
+ * O PostgREST/Supabase limita cada resposta a `db-max-rows` (1000 por padrão),
+ * então paginamos com `.range()` em lotes até esgotar — caso contrário a
+ * contagem "trava" em ~1000 mesmo havendo milhares de nós. A ordenação
+ * secundária por `id` torna a paginação determinística (sem pular/repetir).
+ */
 export async function fetchAllNodes(supabase: SupabaseClient): Promise<OrgNode[]> {
-  const { data, error } = await table(supabase)
-    .select('*')
-    .order('level', { ascending: true });
+  const PAGE = 1000;
+  const rows: DbRow[] = [];
 
-  if (error || !data) return [];
-  return (data as DbRow[]).map(rowToNode);
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await table(supabase)
+      .select('*')
+      .order('level', { ascending: true })
+      .order('id',    { ascending: true })
+      .range(from, from + PAGE - 1);
+
+    if (error) break;                       // devolve o que já coletou (ou [])
+    if (!data || data.length === 0) break;
+    rows.push(...(data as DbRow[]));
+    if (data.length < PAGE) break;          // última página
+  }
+
+  return rows.map(rowToNode);
+}
+
+/**
+ * Busca paginada genérica para contornar o limite de 1000 linhas do PostgREST
+ * (`db-max-rows`). `makeQuery` deve devolver a query JÁ ordenada de forma estável
+ * (ex.: por `id`) com `.range(from, to)` aplicado, para não pular/repetir linhas.
+ */
+async function fetchPaged(
+  makeQuery: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<unknown[]> {
+  const PAGE = 1000;
+  const rows: unknown[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await makeQuery(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,15 +107,15 @@ export async function fetchAllNodes(supabase: SupabaseClient): Promise<OrgNode[]
 export async function insertNode(supabase: SupabaseClient, node: OrgNode): Promise<OrgNode> {
   const { data, error } = await table(supabase)
     .insert({
-      id:                  node.id,
-      name:                node.name,
-      role:                node.role,
-      level:               node.level,
-      parent_id:           node.parentId           || null,
-      is_sector:           node.isSector           ?? false,
-      photo_url:           node.photoUrl           ?? null,
-      sector_color:        node.sectorColor        ?? null,
-      sector_director_of:  node.sectorDirectorOf   ?? null,
+      id:             node.id,
+      name:           node.name,
+      role:           node.role,
+      level:          node.level,
+      parent_id:      node.parentId      || null,
+      is_sector:      node.isSector      ?? false,
+      photo_url:      node.photoUrl      ?? null,
+      sector_color:   node.sectorColor   ?? null,
+      funcionario_id: node.funcionarioId ?? null,
     })
     .select()
     .single();
@@ -94,14 +132,14 @@ export async function patchNode(
 ): Promise<OrgNode> {
   const dbPatch: Partial<DbRow> = {};
 
-  if (patch.name              !== undefined) dbPatch.name               = patch.name;
-  if (patch.role              !== undefined) dbPatch.role               = patch.role;
-  if (patch.level             !== undefined) dbPatch.level              = patch.level;
-  if (patch.parentId          !== undefined) dbPatch.parent_id          = patch.parentId ?? null;
-  if (patch.isSector          !== undefined) dbPatch.is_sector          = patch.isSector;
-  if (patch.photoUrl          !== undefined) dbPatch.photo_url          = patch.photoUrl || null;
-  if (patch.sectorColor       !== undefined) dbPatch.sector_color       = patch.sectorColor || null;
-  if (patch.sectorDirectorOf  !== undefined) dbPatch.sector_director_of = patch.sectorDirectorOf ?? null;
+  if (patch.name          !== undefined) dbPatch.name           = patch.name;
+  if (patch.role          !== undefined) dbPatch.role           = patch.role;
+  if (patch.level         !== undefined) dbPatch.level          = patch.level;
+  if (patch.parentId      !== undefined) dbPatch.parent_id      = patch.parentId ?? null;
+  if (patch.isSector      !== undefined) dbPatch.is_sector      = patch.isSector;
+  if (patch.photoUrl      !== undefined) dbPatch.photo_url      = patch.photoUrl || null;
+  if (patch.sectorColor   !== undefined) dbPatch.sector_color   = patch.sectorColor || null;
+  if (patch.funcionarioId !== undefined) dbPatch.funcionario_id = patch.funcionarioId ?? null;
 
   const { data, error } = await table(supabase)
     .update(dbPatch)
@@ -161,4 +199,156 @@ export async function removeNode(
   if (deleteError) throw new Error(deleteError.message);
 
   return { wasCascade: false, removedCount: 1 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Importação do RH
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Importa o RH para org_nodes montando a hierarquia a partir de `cargos.nivel`:
+ *   - nivel 0   → Diretoria (raiz do organograma, sem pai)
+ *   - nivel 1   → Gerência Geral (sob a Diretoria)
+ *   - setores   → nós de setor (nível 2, is_sector) criados a partir da tabela
+ *                 `setores`; ficam sob a Gerência Geral (ou, na falta dela, sob
+ *                 a Diretoria)
+ *   - nivel ≥ 2 → pessoas, penduradas no seu setor (via funcionarios.id_setor)
+ *
+ * Idempotente: nós de pessoa usam id `rh-{uuid}` (match por funcionario_id) e
+ * nós de setor reaproveitam um setor existente de mesmo nome ou criam `sec-{uuid}`.
+ *
+ * Sub-setores (nível 3) NÃO são criados aqui — a tabela `setores` não tem vínculo
+ * de setor-pai. Crie-os manualmente no painel do organograma se precisar.
+ *
+ * Usa queries separadas em vez de joins PostgREST para evitar erros de schema cache.
+ */
+export async function importFromFuncionarios(supabase: SupabaseClient): Promise<{
+  created:  number;
+  updated:  number;
+  skipped:  number;
+  orphans:  number;
+  diagnostics: { funcionarios: number; cargos: number; setores: number };
+}> {
+  const rhSchema = supabase.schema('organograma');
+
+  type CargoRow = { id: string; nome: string; nivel: number };
+  type SetorRow = { id: string; nome: string; sigla: string | null; cor: string | null };
+  type FuncRaw  = { id: string; nome_completo: string; foto_url: string | null; id_cargo: string; id_setor: string };
+
+  // 1. Busca paginada (sem filtros extras): contorna o limite de 1000 linhas do
+  //    PostgREST — senão importações com >1000 funcionários ficam truncadas.
+  let funcionarios: FuncRaw[], cargos: CargoRow[], setores: SetorRow[];
+  try {
+    [funcionarios, cargos, setores] = await Promise.all([
+      fetchPaged((from, to) => rhSchema.from('funcionarios')
+        .select('id, nome_completo, foto_url, id_cargo, id_setor')
+        .order('id', { ascending: true }).range(from, to)) as Promise<FuncRaw[]>,
+      fetchPaged((from, to) => rhSchema.from('cargos')
+        .select('id, nome, nivel')
+        .order('id', { ascending: true }).range(from, to)) as Promise<CargoRow[]>,
+      fetchPaged((from, to) => rhSchema.from('setores')
+        .select('id, nome, sigla, cor')
+        .order('id', { ascending: true }).range(from, to)) as Promise<SetorRow[]>,
+    ]);
+  } catch (e) {
+    throw new Error(`RH: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!funcionarios.length) throw new Error('Nenhum funcionário encontrado no RH.');
+
+  const cargoMap = new Map(cargos.map((c) => [c.id, c]));
+
+  // 2. Org_nodes existentes (para idempotência) — também paginado
+  const existingNodes = await fetchPaged((from, to) => table(supabase)
+    .select('*').order('id', { ascending: true }).range(from, to)) as DbRow[];
+
+  const existingByFuncId     = new Map<string, DbRow>();
+  const existingSectorByName = new Map<string, DbRow>();
+  for (const row of existingNodes) {
+    if (row.funcionario_id) existingByFuncId.set(row.funcionario_id, row);
+    if (row.is_sector)      existingSectorByName.set(row.name.toLowerCase(), row);
+  }
+
+  let created = 0, updated = 0, skipped = 0, orphans = 0;
+
+  // 3. Liderança: nível do cargo define Diretoria (0) e Gerência Geral (1)
+  const withLevel = (funcionarios as FuncRaw[]).map((f) => {
+    const cargo = cargoMap.get(f.id_cargo);
+    return {
+      f,
+      level: cargo ? Math.max(0, Math.min(11, cargo.nivel)) : 9,
+      role:  cargo ? cargo.nome : 'Colaborador',
+    };
+  });
+
+  const directors      = withLevel.filter((x) => x.level === 0);
+  const gms            = withLevel.filter((x) => x.level === 1);
+  // Regra: só o 1º diretor fica no centro (nível 0). Do 2º em diante vira Diretor de Setor.
+  const primaryDirectorFuncId = directors[0]?.f.id ?? null;
+  const rootDirectorId = primaryDirectorFuncId ? `rh-${primaryDirectorFuncId}` : null;
+  // Setores penduram na Gerência Geral única; com 0 ou várias GGs, vão sob a Diretoria.
+  const sectorParentId = (gms.length === 1 ? `rh-${gms[0].f.id}` : null) ?? rootDirectorId;
+
+  // 4. Nós de setor (nível 2): reaproveita por nome ou cria `sec-{uuid}`
+  const sectorNodeIdBySetorId = new Map<string, string>();
+  for (const s of setores as SetorRow[]) {
+    const existing = existingSectorByName.get(s.nome.toLowerCase());
+    const nodeId   = existing?.id ?? `sec-${s.id}`;
+    sectorNodeIdBySetorId.set(s.id, nodeId);
+
+    const { error } = await table(supabase).upsert({
+      id:           nodeId,
+      name:         s.nome,
+      role:         s.sigla ?? '',
+      level:        2,
+      parent_id:    sectorParentId,
+      is_sector:    true,
+      sector_color: s.cor ?? null,
+    }, { onConflict: 'id' });
+
+    if (error) { skipped++; continue; }
+    if (existing) updated++; else created++;
+  }
+
+  // 5. Pessoas (e liderança) — upsert por id `rh-{uuid}`
+  for (const { f, level, role } of withLevel) {
+    // Só o primeiro diretor (nível 0) ocupa o centro; do 2º em diante vira
+    // Diretor de Setor (nível 4), nunca outro nó central.
+    const isPrimaryDirector = level === 0 && f.id === primaryDirectorFuncId;
+    const effectiveLevel    = level === 0 && !isPrimaryDirector ? 4 : level;
+
+    let parentId: string | null;
+    if (isPrimaryDirector)         parentId = null;                                          // Diretoria (raiz única)
+    else if (effectiveLevel === 1) parentId = rootDirectorId;                                // Gerência Geral
+    else                           parentId = sectorNodeIdBySetorId.get(f.id_setor) ?? null; // pessoa/diretor → setor
+
+    if (parentId === null && effectiveLevel >= 2) orphans++;
+
+    const existing = existingByFuncId.get(f.id);
+    const { error } = await table(supabase).upsert({
+      id:             `rh-${f.id}`,
+      name:           f.nome_completo,
+      role,
+      level:          effectiveLevel,
+      parent_id:      parentId,
+      is_sector:      false,
+      photo_url:      f.foto_url ?? null,
+      sector_color:   null,
+      funcionario_id: f.id,
+    }, { onConflict: 'id' });
+
+    if (error) { skipped++; continue; }
+    if (existing) updated++; else created++;
+  }
+
+  return {
+    created,
+    updated,
+    skipped,
+    orphans,
+    diagnostics: {
+      funcionarios: (funcionarios as FuncRaw[]).length,
+      cargos:       (cargos       as CargoRow[]).length,
+      setores:      (setores      as SetorRow[]).length,
+    },
+  };
 }

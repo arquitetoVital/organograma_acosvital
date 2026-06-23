@@ -108,51 +108,30 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   const sectorDetail = useMemo(() => {
     if (!activeSectorId) return null;
     const subtree = getSubtree(activeSectorId, allNodes);
-    const sectorDirectors = allNodes.filter((n) => n.sectorDirectorOf === activeSectorId);
-    const sectorDirectorIds = new Set(sectorDirectors.map((d) => d.id));
 
     // Map each distinct person-level to a consecutive ring (rank-based, not absolute).
-    // This prevents empty rings when levels are skipped:
-    //   sector + apprentice only → apprentice at ring 1
-    //   sector + manager + apprentice → manager ring 1, apprentice ring 2
-    // When a sector director exists it occupies ring 1, so person rings start at 2.
+    // Prevents empty rings when levels are skipped:
+    //   only level 4+9 present → level 4 at ring 1, level 9 at ring 2
     const presentLevels = [...new Set(
       subtree
         .filter((n) => n.id !== activeSectorId && !n.isSector && n.level > 0)
         .map((n) => n.level)
     )].sort((a, b) => a - b);
-    const ringOffset = sectorDirectors.length > 0 ? 2 : 1;
-    const levelToRing = new Map(presentLevels.map((lvl, i) => [lvl, i + ringOffset]));
+    const levelToRing = new Map(presentLevels.map((lvl, i) => [lvl, i + 1]));
 
-    let relabeled: OrgNode[];
-    if (sectorDirectors.length > 0) {
-      // Directors sit at ring 1; direct sector people are reparented under the first director
-      // so the connection chain is sector → director → manager (correct arc distribution).
-      const firstDirId = sectorDirectors[0].id;
-      const directPersonIds = new Set(
-        subtree.filter((n) => n.parentId === activeSectorId && !n.isSector).map((n) => n.id)
-      );
-      relabeled = [
-        ...subtree.map((n) => {
-          if (n.id === activeSectorId) return { ...n, parentId: null };
-          if (directPersonIds.has(n.id)) return { ...n, parentId: firstDirId };
-          return n;
-        }),
-        ...sectorDirectors.map((d) => ({ ...d, parentId: activeSectorId })),
-      ];
-    } else {
-      relabeled = subtree.map((n) => n.id === activeSectorId ? { ...n, parentId: null } : n);
-    }
+    // Clear sector root's parentId so it renders at center (depth 0)
+    const relabeled = subtree.map((n) =>
+      n.id === activeSectorId ? { ...n, parentId: null } : n
+    );
 
     const getDepth = (node: OrgNode, bfsDepth: number) => {
-      if (sectorDirectorIds.has(node.id)) return 1;
       const ring = levelToRing.get(node.level);
       return ring !== undefined ? ring : bfsDepth; // fallback: sub-sectors use BFS depth
     };
 
     const pos = calculateLayout(relabeled, SECTOR_RING_RADII, SECTOR_NODE_RADIUS, getDepth);
     const conn = calculateConnections(pos);
-    return { pos, conn, sectorDirectorIds };
+    return { pos, conn };
   }, [activeSectorId, allNodes]);
 
   // ── Overview derived data ─────────────────────────────────────────────
@@ -940,7 +919,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
 
             {/* People nodes */}
             {detailPeopleNodes.map((node) => {
-              const isSectorDirector = sectorDetail.sectorDirectorIds.has(node.id);
+              const isSectorDirector = node.level === 4;
               const color = isSectorDirector ? levelColors[0] : (levelColors[node.level] ?? '#fff');
               return (
                 <g key={node.id}>

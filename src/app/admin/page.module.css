@@ -149,6 +149,28 @@
   border-radius: 10px;
 }
 
+/* ── Import from RH button ── */
+.importRhBtn {
+  font-size: 12px; color: #34d399;
+  background: rgba(52,211,153,.08);
+  border: 1px solid rgba(52,211,153,.25);
+  border-radius: 8px; padding: 5px 14px;
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.importRhBtn:hover:not(:disabled) { background: rgba(52,211,153,.16); border-color: rgba(52,211,153,.5); }
+.importRhBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+.cancelImportBtn {
+  font-size: 12px; color: #f87171;
+  background: rgba(248,113,113,.08);
+  border: 1px solid rgba(248,113,113,.25);
+  border-radius: 8px; padding: 5px 14px; margin-left: 8px;
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.cancelImportBtn:hover { background: rgba(248,113,113,.16); border-color: rgba(248,113,113,.5); }
+
 /* ── Director section ── */
 .directorSection { display: flex; flex-direction: column; gap: 12px; }
 
@@ -170,6 +192,11 @@
   transition: background .15s, border-color .15s;
 }
 .addDirectorBtn:hover { background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.5); }
+
+.directorSectionHint {
+  font-size: 11px; color: rgba(255,255,255,.45);
+  font-style: italic;
+}
 
 /* Directors grid */
 .directorsGrid {

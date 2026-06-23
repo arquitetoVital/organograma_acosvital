@@ -28,19 +28,19 @@ function safeColor(v: unknown): string | undefined {
 function safeLevel(v: unknown): number | null {
   if (typeof v !== 'number' || !Number.isFinite(v)) return null;
   const l = Math.floor(v);
-  return l >= 0 && l <= 10 ? l : null;
+  return l >= 0 && l <= 11 ? l : null;
 }
 
 export interface SanitizedNode {
-  id:                string;
-  name:              string;
-  role:              string;
-  level:             number;
-  parentId:          string;
-  isSector?:         boolean;
-  photoUrl?:         string;
-  sectorColor?:      string;
-  sectorDirectorOf?: string | null;
+  id:             string;
+  name:           string;
+  role:           string;
+  level:          number;
+  parentId:       string;
+  isSector?:      boolean;
+  photoUrl?:      string;
+  sectorColor?:   string;
+  funcionarioId?: string | null;
 }
 
 export function sanitizeNode(raw: unknown): SanitizedNode | null {
@@ -60,10 +60,10 @@ export function sanitizeNode(raw: unknown): SanitizedNode | null {
     parentId: safeId(r.parentId),
   };
 
-  if (r.isSector          !== undefined) node.isSector         = Boolean(r.isSector);
-  if (r.photoUrl          !== undefined) node.photoUrl         = safeUrl(r.photoUrl);
-  if (r.sectorColor       !== undefined) node.sectorColor      = safeColor(r.sectorColor);
-  if (r.sectorDirectorOf  !== undefined) node.sectorDirectorOf = r.sectorDirectorOf ? safeId(r.sectorDirectorOf) : null;
+  if (r.isSector        !== undefined) node.isSector       = Boolean(r.isSector);
+  if (r.photoUrl        !== undefined) node.photoUrl       = safeUrl(r.photoUrl);
+  if (r.sectorColor     !== undefined) node.sectorColor    = safeColor(r.sectorColor);
+  if (r.funcionarioId   !== undefined) node.funcionarioId  = r.funcionarioId ? safeId(r.funcionarioId) : null;
 
   return node;
 }
@@ -77,10 +77,10 @@ export function sanitizePatch(raw: unknown): Partial<SanitizedNode> | null {
   if (r.role        !== undefined) p.role        = clean(r.role, 150);
   if (r.photoUrl    !== undefined) p.photoUrl    = safeUrl(r.photoUrl);
   if (r.parentId    !== undefined) p.parentId    = safeId(r.parentId);
-  if (r.isSector          !== undefined) p.isSector         = Boolean(r.isSector);
-  if (r.sectorColor       !== undefined) p.sectorColor      = safeColor(r.sectorColor);
-  if (r.sectorDirectorOf  !== undefined) p.sectorDirectorOf = r.sectorDirectorOf ? safeId(r.sectorDirectorOf) : null;
-  if (r.level             !== undefined) {
+  if (r.isSector    !== undefined) p.isSector    = Boolean(r.isSector);
+  if (r.sectorColor !== undefined) p.sectorColor = safeColor(r.sectorColor);
+  if (r.funcionarioId !== undefined) p.funcionarioId = r.funcionarioId ? safeId(r.funcionarioId) : null;
+  if (r.level       !== undefined) {
     const l = safeLevel(r.level);
     if (l !== null) p.level = l;
   }
