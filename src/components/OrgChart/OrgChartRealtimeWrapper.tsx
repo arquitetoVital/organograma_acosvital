@@ -9,6 +9,28 @@ import {
 } from '@/utils/radialLayout';
 import type { OrgNode } from '@/types/orgChart';
 
+const syncDotStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 14,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 40,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  background: 'rgba(8, 14, 40, 0.88)',
+  border: '1px solid rgba(255,255,255,0.10)',
+  borderRadius: 20,
+  padding: '5px 12px',
+  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'rgba(255,255,255,0.55)',
+  letterSpacing: '0.04em',
+  backdropFilter: 'blur(10px)',
+  pointerEvents: 'none',
+};
+
 interface Props {
   initialNodes: OrgNode[];
   levelColors: Record<number, string>;
@@ -16,7 +38,8 @@ interface Props {
 }
 
 export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, levelNames }: Props) {
-  const [nodes, setNodes] = useState<OrgNode[]>(initialNodes);
+  const [nodes, setNodes]         = useState<OrgNode[]>(initialNodes);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const overviewNodes = useMemo(
     () => nodes.filter((n) => n.level <= 2),
@@ -42,10 +65,15 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
         () => {
           clearTimeout(debounce);
           debounce = setTimeout(async () => {
-            const res = await fetch('/api/org');
-            if (res.ok) {
-              const data: unknown = await res.json();
-              if (Array.isArray(data)) setNodes(data as OrgNode[]);
+            setIsSyncing(true);
+            try {
+              const res = await fetch('/api/org');
+              if (res.ok) {
+                const data: unknown = await res.json();
+                if (Array.isArray(data)) setNodes(data as OrgNode[]);
+              }
+            } finally {
+              setIsSyncing(false);
             }
           }, 350);
         },
@@ -59,12 +87,24 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
   }, []);
 
   return (
-    <OrgChart
-      positions={positions}
-      connections={connections}
-      allNodes={nodes}
-      levelColors={levelColors}
-      levelNames={levelNames}
-    />
+    <>
+      <OrgChart
+        positions={positions}
+        connections={connections}
+        allNodes={nodes}
+        levelColors={levelColors}
+        levelNames={levelNames}
+      />
+      {isSyncing && (
+        <div style={syncDotStyle}>
+          <svg width="8" height="8" viewBox="0 0 8 8">
+            <circle cx="4" cy="4" r="3" fill="#60a5fa">
+              <animate attributeName="opacity" values="1;0.3;1" dur="1s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+          Sincronizando…
+        </div>
+      )}
+    </>
   );
 }

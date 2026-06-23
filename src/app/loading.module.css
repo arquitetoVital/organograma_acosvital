@@ -1,0 +1,68 @@
+/* ── Loading skeleton do organograma ─────────────────────────────────── */
+.page {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 42%, #0b1830 0%, #060d1f 55%, #03060f 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  overflow: hidden;
+}
+
+.svg {
+  width: min(86vw, 86vh);
+  height: min(86vw, 86vh);
+  overflow: visible;
+}
+
+/* Anéis-guia rotatórios */
+@keyframes spin    { to { transform: rotate( 360deg); } }
+@keyframes spinRev { to { transform: rotate(-360deg); } }
+
+.ringOuter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin 130s linear infinite;
+}
+.ringInner {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spinRev 180s linear infinite;
+}
+
+/* Pulso dos nós placeholder */
+@keyframes nodePulse {
+  0%, 100% { opacity: 0.07; }
+  50%       { opacity: 0.26; }
+}
+.node {
+  animation: nodePulse 2.2s ease-in-out infinite;
+}
+
+/* Centro (diretor) */
+@keyframes centerPulse {
+  0%, 100% { opacity: 0.14; }
+  50%       { opacity: 0.40; }
+}
+.center {
+  animation: centerPulse 2.8s ease-in-out infinite;
+}
+.centerBorder {
+  animation: centerPulse 2.8s ease-in-out infinite;
+}
+
+/* Linha de conexão */
+.stem {
+  stroke: rgba(255,255,255,0.04);
+}
+
+/* Texto de status */
+.label {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.32);
+  letter-spacing: 0.06em;
+}
