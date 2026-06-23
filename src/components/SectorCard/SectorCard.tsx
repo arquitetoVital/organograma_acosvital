@@ -40,6 +40,12 @@ export default function SectorCard({ node, color, onClick }: Props) {
       aria-label={`Abrir setor ${node.name}`}
     >
       <title>Setor: {node.name} — clique para expandir</title>
+      <defs>
+        <radialGradient id={`grad-sec-${node.id}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.2} />
+          <stop offset="100%" stopColor="#142133" stopOpacity={1} />
+        </radialGradient>
+      </defs>
 
       {/* Outer glow */}
       <circle cx={0} cy={0} r={r + 10} fill={color} fillOpacity={0.08} />
@@ -65,7 +71,7 @@ export default function SectorCard({ node, color, onClick }: Props) {
       />
 
       {/* Background fill */}
-      <circle cx={0} cy={0} r={r} style={{ fill: 'var(--bg-deep)' }} />
+      <circle cx={0} cy={0} r={r} fill={`url(#grad-sec-${node.id})`} />
 
       {/* Abbreviation (always shown) */}
       <text

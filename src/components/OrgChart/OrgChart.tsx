@@ -10,6 +10,7 @@ import NodeCard from '@/components/NodeCard/NodeCard';
 import CenterCard from '@/components/CenterCard/CenterCard';
 import SectorCard from '@/components/SectorCard/SectorCard';
 import OrgTreeView from './OrgTreeView';
+import Starfield from './Starfield';
 import styles from './OrgChart.module.css';
 
 interface Props {
@@ -42,7 +43,8 @@ const ORB_TIP    = '#A8D4F0';  // light sky blue — alive flowing tip
 const ORB_NAVY   = '#081336';  // deep navy — depth layer
 
 export default function OrgChart({ positions, connections, allNodes, levelNames, levelColors }: Props) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef     = useRef<SVGSVGElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [sectorStack, setSectorStack] = useState<string[]>([]);
   const activeSectorId = sectorStack.length > 0 ? sectorStack[sectorStack.length - 1] : null;
@@ -712,6 +714,27 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
 
   useEffect(() => { setMounted(true); }, []);
 
+  // ── Tier 3: tilt 3D sutil seguindo o mouse ────────────────────────────
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+
+  // Tilt 3D: lê posição do mouse relativa ao wrapper e inclina o canvas
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+    const MAX_DEG = 2.8;
+    const onMove = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      const nx = (e.clientX - rect.left  - rect.width  / 2) / (rect.width  / 2);
+      const ny = (e.clientY - rect.top   - rect.height / 2) / (rect.height / 2);
+      setTilt({ x: ny * -MAX_DEG, y: nx * MAX_DEG });
+    };
+    const onLeave = () => setTilt({ x: 0, y: 0 });
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseleave', onLeave);
+    return () => { el.removeEventListener('mousemove', onMove); el.removeEventListener('mouseleave', onLeave); };
+  }, []);
 
   if (!mounted) {
     return (
@@ -727,7 +750,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   }
 
   return (
-    <div className={`${styles.wrapper} ${styles.wrapperLoaded}`}>
+    <div ref={wrapperRef} className={`${styles.wrapper} ${styles.wrapperLoaded}`}>
       {/* ── Barra: alternância de modo (Mapa/Lista) + busca ─────────── */}
       <div className={styles.toolbar}>
         <div className={styles.segmented}>
@@ -824,6 +847,12 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
         )}
       </aside>
 
+      {/* ── Canvas inclinável: starfield + SVG ─────────────────────── */}
+      <div
+        className={styles.canvasTilt}
+        style={{ transform: `perspective(1400px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)` }}
+      >
+        <Starfield vbRef={vbRef} baseW={activeSectorId ? SECTOR_VB.w : OVERVIEW_VB.w} />
       {/* ── SVG Canvas ──────────────────────────────────────────────── */}
       <svg
         ref={svgRef}
@@ -960,6 +989,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
           <FlyHighlight x={highlightPos.x} y={highlightPos.y} r={highlightPos.radius} />
         )}
       </svg>
+      </div>{/* /canvasTilt */}
 
       {/* ── Zoom Controls ───────────────────────────────────────────── */}
       <div className={styles.controls}>
