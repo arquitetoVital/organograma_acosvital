@@ -208,20 +208,18 @@ export function calculateOverviewLayout(
 /**
  * Layout for the sector detail view.
  *
- * Rules:
- *  - Compressed level→ring mapping: only levels actually present get
- *    consecutive rings (1, 2, 3…). If a sub-sector has only a Coordenador
- *    (level 6) and no Gerente (level 5), the Coordenador appears at ring 1
- *    (closest to center) instead of leaving rings 1–2 empty.
- *  - Dynamic ring radius: if a ring has many nodes the radius is expanded
- *    to guarantee minimum spacing, preventing crowding when many people
- *    are compressed into a single level.
- *  - Node visual size still uses the absolute level→ring mapping so
- *    Aprendizes remain small regardless of which compressed ring they occupy.
- *  - Sub-sectors (isSector=true) go to ring 1 and are NOT expanded —
- *    their people are revealed only when the user drills into them.
- *  - Rings 2+ are sorted by effective parent angle and distribution starts
- *    at that angle, so children always appear near their leader.
+ * Two modes depending on ring size:
+ *
+ * RING MODE (≤ MAX_ON_RING nodes): even angular distribution, centered on
+ *   each parent so "4 children of 1 parent → parent is exactly in the middle."
+ *
+ * COLUMN MODE (> MAX_ON_RING nodes): children are stacked RADIALLY (outward)
+ *   instead of tangentially. Each parent gets a "fan of columns"; each column
+ *   is a vertical beam of COL_DEPTH_MAX nodes extending away from the center.
+ *   Example: 50 children → ceil(50/12) = 5 columns × 10 rows (≈ "2×5" grid
+ *   but fan-shaped). The angle between adjacent columns adapts to the arc
+ *   available per parent so columns never overlap each other.
+ *   This keeps large datasets (500+) compact: columns grow outward, not around.
  */
 export function calculateEvenSectorLayout(
   nodes: OrgNode[],
@@ -231,12 +229,16 @@ export function calculateEvenSectorLayout(
 ): PositionedNode[] {
   const START = -Math.PI / 2;
   const PI2   = 2 * Math.PI;
-  const MIN_GAP    = 6;  // minimum gap between node edges (SVG units)
-  const LEVEL_BASE = 3;  // for visual radius: nodeRadii[level - LEVEL_BASE]
+  const MIN_GAP      = 6;   // min gap between node edges in ring mode
+  const LEVEL_BASE   = 3;   // visualR lookup: nodeRadii[level − LEVEL_BASE]
+  const MAX_ON_RING  = 36;  // threshold: rings with more nodes → column mode
+  const COL_DEPTH    = 12;  // max nodes per radial column
+  const COL_ROW_PX   = 32;  // radial distance between rows in a column (px)
+  const COL_GAP_PX   = 55;  // gap between innermost column row and parent ring
+  const MIN_COL_ANG  = (6  * Math.PI) / 180; // minimum 6° between columns
+  const MAX_COL_ANG  = (14 * Math.PI) / 180; // maximum 14° between columns
 
   const maxDefinedNodeR = Math.max(...Object.keys(nodeRadii).map(Number));
-  // Visual radius is keyed by absolute ring (level − LEVEL_BASE) so small
-  // nodes stay small even when compressed to an inner ring.
   const visualR = (node: OrgNode): number => {
     if (node.id === sectorId) return nodeRadii[0] ?? 52;
     if (node.isSector)        return nodeRadii[1] ?? 38;
@@ -265,7 +267,7 @@ export function calculateEvenSectorLayout(
   }
   directSubSectorIds.forEach((id) => markHidden(id));
 
-  // ── Build COMPRESSED level→ring mapping (only present levels get rings) ──
+  // ── Compressed level→ring mapping ──
   const presentLevels = new Set<number>();
   function collectLevels(id: string) {
     for (const c of childrenOf.get(id) ?? []) {
@@ -293,13 +295,18 @@ export function calculateEvenSectorLayout(
   }
   dfs(sectorId);
 
-  // ── Dynamic ring radius: expand if node count demands minimum spacing ──
+  // ── Ring-mode dynamic radius (not used for column-mode rings) ──
   const dynamicRingR = new Map<number, number>();
   ringCollect.forEach((ringNodes, ring) => {
     const staticR = ringRadii[ring] ?? (ring * 200);
-    const maxVR   = Math.max(...ringNodes.map((n) => visualR(n)));
-    const minR    = (ringNodes.length * (2 * maxVR + MIN_GAP)) / PI2;
-    dynamicRingR.set(ring, Math.max(staticR, minR));
+    if (ringNodes.length <= MAX_ON_RING) {
+      const maxVR = Math.max(...ringNodes.map((n) => visualR(n)));
+      const minR  = (ringNodes.length * (2 * maxVR + MIN_GAP)) / PI2;
+      dynamicRingR.set(ring, Math.max(staticR, minR));
+    } else {
+      // Column mode — radius is computed per-parent at placement time
+      dynamicRingR.set(ring, staticR);
+    }
   });
 
   const result: PositionedNode[] = [];
@@ -312,13 +319,9 @@ export function calculateEvenSectorLayout(
   }
   angleOf.set(sectorId, 0);
 
-  // Ring-1 people — used to infer visual parent angle for flat-hierarchy nodes
+  // Ring-1 people — used to infer effective parent angle for flat-hierarchy nodes
   const ring1People: { level: number; angle: number }[] = [];
 
-  // Effective parent angle: flat-hierarchy nodes (parentId = sectorId) anchor
-  // to the ring-1 person with the highest level ≤ their own level so that
-  // a Gerente appears radially below its Diretor even when both report
-  // directly to the sector in the database.
   const effectiveAngle = (node: OrgNode): number => {
     if (node.parentId !== sectorId) return angleOf.get(node.parentId!) ?? START;
     if (ring1People.length > 0) {
@@ -330,82 +333,155 @@ export function calculateEvenSectorLayout(
     return START;
   };
 
-  // Tracks placed nodes per ring so ring N+1 can find its nearest parent in ring N
+  // placedByRing: ring-mode → all nodes; column-mode → column tip nodes only
+  // (tips = deepest node in each column, becomes parent for the next ring)
   const placedByRing = new Map<number, Array<{ id: string; angle: number }>>();
+  // Outermost radius actually placed in each ring (including column depth)
+  const outerRByRing = new Map<number, number>();
 
   // ── Place each ring ──
+  const norm = (θ: number) => ((θ - START + PI2 * 2) % PI2);
+
   [...ringCollect.keys()].sort((a, b) => a - b).forEach((ring) => {
-    const ringNodes = ringCollect.get(ring)!;
-    const r    = dynamicRingR.get(ring)!;
-    const step = PI2 / ringNodes.length;
-    const norm = (θ: number) => ((θ - START + PI2 * 2) % PI2);
+    const ringNodes  = ringCollect.get(ring)!;
+    const prevPlaced = placedByRing.get(ring - 1) ?? [];
+    const prevOuterR = outerRByRing.get(ring - 1) ?? dynamicRingR.get(ring - 1) ?? 0;
+    const useColumns = ring > 1 && ringNodes.length > MAX_ON_RING && prevPlaced.length > 0;
 
     const ringPlaced: Array<{ id: string; angle: number }> = [];
 
-    // Compute (node, angle) pairs: ring-1 evenly from START; ring 2+ centered
-    // on each parent so that if a parent has 4 children, it appears exactly in
-    // the middle of those 4 (not at the edge of the group).
-    let nodeAngles: Array<{ node: OrgNode; angle: number }>;
+    if (!useColumns) {
+      // ────────────── RING MODE ──────────────
+      const r    = dynamicRingR.get(ring)!;
+      const step = PI2 / ringNodes.length;
 
-    if (ring === 1) {
-      nodeAngles = ringNodes.map((node, i) => ({ node, angle: START + step * i }));
-    } else {
-      // Sort all nodes by effective parent angle
-      ringNodes.sort((a, b) => norm(effectiveAngle(a)) - norm(effectiveAngle(b)));
+      let nodeAngles: Array<{ node: OrgNode; angle: number }>;
 
-      // Group consecutive nodes that share the same effective parent angle
-      const groups: Array<{ parentAngle: number; nodes: OrgNode[] }> = [];
-      ringNodes.forEach((node) => {
-        const pa  = effectiveAngle(node);
-        const last = groups[groups.length - 1];
-        if (last && Math.abs(norm(pa) - norm(last.parentAngle)) < 0.001) {
-          last.nodes.push(node);
-        } else {
-          groups.push({ parentAngle: pa, nodes: [node] });
-        }
-      });
-
-      // Place each group CENTERED on its parent angle:
-      // child i of K children → parentAngle + (i − (K−1)/2) × step
-      nodeAngles = [];
-      groups.forEach(({ parentAngle, nodes: grp }) => {
-        const k = grp.length;
-        grp.forEach((node, i) => {
-          nodeAngles.push({ node, angle: parentAngle + (i - (k - 1) / 2) * step });
+      if (ring === 1) {
+        nodeAngles = ringNodes.map((node, i) => ({ node, angle: START + step * i }));
+      } else {
+        ringNodes.sort((a, b) => norm(effectiveAngle(a)) - norm(effectiveAngle(b)));
+        const groups: Array<{ parentAngle: number; nodes: OrgNode[] }> = [];
+        ringNodes.forEach((node) => {
+          const pa   = effectiveAngle(node);
+          const last = groups[groups.length - 1];
+          if (last && Math.abs(norm(pa) - norm(last.parentAngle)) < 0.001) {
+            last.nodes.push(node);
+          } else {
+            groups.push({ parentAngle: pa, nodes: [node] });
+          }
         });
-      });
-    }
+        nodeAngles = [];
+        groups.forEach(({ parentAngle, nodes: grp }) => {
+          const k = grp.length;
+          grp.forEach((node, i) => {
+            nodeAngles.push({ node, angle: parentAngle + (i - (k - 1) / 2) * step });
+          });
+        });
+      }
 
-    nodeAngles.forEach(({ node, angle }) => {
-      // For flat-hierarchy nodes at ring > 1, infer visual parent as the
-      // closest-angle node in the ring immediately above so connections form a
-      // proper chain instead of a star radiating from the sector centre.
-      let visualParentId = node.parentId;
-      if (ring > 1 && node.parentId === sectorId) {
-        const prev = placedByRing.get(ring - 1) ?? [];
-        if (prev.length > 0) {
+      nodeAngles.forEach(({ node, angle }) => {
+        let visualParentId = node.parentId;
+        if (ring > 1 && node.parentId === sectorId && prevPlaced.length > 0) {
           const myN = norm(angle);
-          visualParentId = prev.reduce((best, c) => {
+          visualParentId = prevPlaced.reduce((best, c) => {
             const dc = Math.min(Math.abs(norm(c.angle) - myN), PI2 - Math.abs(norm(c.angle) - myN));
             const db = Math.min(Math.abs(norm(best.angle) - myN), PI2 - Math.abs(norm(best.angle) - myN));
             return dc < db ? c : best;
           }).id;
         }
-      }
-
-      const vr = visualR(node);
-      result.push({
-        ...node,
-        parentId: visualParentId,
-        x: Math.cos(angle) * r,
-        y: Math.sin(angle) * r,
-        angle,
-        radius: vr,
+        const vr = visualR(node);
+        result.push({ ...node, parentId: visualParentId, x: Math.cos(angle) * r, y: Math.sin(angle) * r, angle, radius: vr });
+        angleOf.set(node.id, angle);
+        ringPlaced.push({ id: node.id, angle });
+        if (ring === 1 && !node.isSector) ring1People.push({ level: node.level, angle });
       });
-      angleOf.set(node.id, angle);
-      ringPlaced.push({ id: node.id, angle });
-      if (ring === 1 && !node.isSector) ring1People.push({ level: node.level, angle });
-    });
+
+      outerRByRing.set(ring, r);
+
+    } else {
+      // ────────────── COLUMN MODE ──────────────
+      // Children are arranged in radial columns that extend outward from each
+      // parent. Columns are centered on the parent's angle. The angle step
+      // between adjacent columns adapts to the arc available per parent so
+      // columns from different parents never overlap each other.
+      const baseR = prevOuterR + COL_GAP_PX;
+
+      const sortedParents = [...prevPlaced].sort((a, b) => norm(a.angle) - norm(b.angle));
+      const M = sortedParents.length;
+      const K = ringNodes.length;
+
+      // Assign children to parents
+      const childrenByParent = new Map<string, OrgNode[]>();
+      sortedParents.forEach((p) => childrenByParent.set(p.id, []));
+
+      ringNodes.forEach((node, i) => {
+        const pid = node.parentId;
+        if (pid && pid !== sectorId && childrenByParent.has(pid)) {
+          childrenByParent.get(pid)!.push(node);
+        } else {
+          // Flat hierarchy: proportional assignment to sorted parents
+          const pIdx = Math.min(Math.floor((i * M) / K), M - 1);
+          childrenByParent.get(sortedParents[pIdx].id)!.push(node);
+        }
+      });
+
+      let localMaxR = baseR;
+
+      sortedParents.forEach(({ id: parentId, angle: parentAngle }, pIdx) => {
+        const children = childrenByParent.get(parentId) ?? [];
+        if (children.length === 0) return;
+
+        // Arc available for this parent's columns (half distance to each neighbour)
+        const prevA = pIdx > 0 ? norm(sortedParents[pIdx - 1].angle) : norm(parentAngle) - PI2 / M;
+        const nextA = pIdx < M - 1 ? norm(sortedParents[pIdx + 1].angle) : norm(parentAngle) + PI2 / M;
+        const halfArc = Math.min(
+          Math.abs(norm(parentAngle) - prevA) / 2,
+          Math.abs(nextA - norm(parentAngle)) / 2,
+        );
+
+        const colCount  = Math.ceil(children.length / COL_DEPTH);
+        // Angle step between columns clamped to available arc and design limits
+        const colAngStep = colCount > 1
+          ? Math.min(MAX_COL_ANG, Math.max(MIN_COL_ANG, (halfArc * 2 * 0.85) / (colCount - 1)))
+          : 0;
+
+        // colLast[col] = id of the last-placed node in that column (becomes next row's parent)
+        const colLast = new Map<number, string>();
+
+        children.forEach((node, i) => {
+          const col = Math.floor(i / COL_DEPTH);
+          const row = i % COL_DEPTH;
+
+          const colAngle = parentAngle + (col - (colCount - 1) / 2) * colAngStep;
+          const nodeR    = baseR + row * COL_ROW_PX;
+
+          // Row 0 connects to parent; subsequent rows connect to previous row
+          const visualParentId = row === 0 ? parentId : (colLast.get(col) ?? parentId);
+
+          const vr = visualR(node);
+          result.push({
+            ...node,
+            parentId: visualParentId,
+            x: Math.cos(colAngle) * nodeR,
+            y: Math.sin(colAngle) * nodeR,
+            angle: colAngle,
+            radius: vr,
+          });
+          angleOf.set(node.id, colAngle);
+          colLast.set(col, node.id);
+          localMaxR = Math.max(localMaxR, nodeR + vr);
+        });
+
+        // Column tips (deepest node per column) become parents for the next ring
+        colLast.forEach((tipId, col) => {
+          const tipAngle = parentAngle + (col - (colCount - 1) / 2) * colAngStep;
+          ringPlaced.push({ id: tipId, angle: tipAngle });
+        });
+      });
+
+      outerRByRing.set(ring, localMaxR);
+    }
 
     placedByRing.set(ring, ringPlaced);
   });
