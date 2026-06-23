@@ -4,7 +4,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { OrgNode, PositionedNode, Connection } from '@/types/orgChart';
 import {
   SECTOR_RING_RADII, SECTOR_NODE_RADIUS,
-  getSubtree, calculateLayout, calculateConnections,
+  getSubtree, calculateEvenSectorLayout, calculateConnections,
 } from '@/utils/radialLayout';
 import NodeCard from '@/components/NodeCard/NodeCard';
 import CenterCard from '@/components/CenterCard/CenterCard';
@@ -30,7 +30,7 @@ const SECTOR_VB:   ViewBox = { x: -1100, y: -1100, w: 2200, h: 2200 };
 const MIN_W_OV = 300;
 const MAX_W_OV = 1500;
 const MIN_W_SC = 400;
-const MAX_W_SC = 4000;
+const MAX_W_SC = 6000; // ring 8 radius=1590 → full diameter ~3400; allow zooming out further
 const CULL_MARGIN = 120;
 const SPINE_R = 430; // Management ring sits on the sector ring (r=430)
 
@@ -101,40 +101,31 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     setSectorStack((prev) => prev.slice(0, -1));
   }, []);
 
-  // Animate viewBox when switching views
-  useEffect(() => {
-    animateTo(activeSectorId ? SECTOR_VB : OVERVIEW_VB, 700);
-  }, [activeSectorId, animateTo]);
-
   // ── Sector detail layout (computed client-side) ────────────────────────
   const sectorDetail = useMemo(() => {
     if (!activeSectorId) return null;
     const subtree = getSubtree(activeSectorId, allNodes);
-
-    // Map each distinct person-level to a consecutive ring (rank-based, not absolute).
-    // Prevents empty rings when levels are skipped:
-    //   only level 4+9 present → level 4 at ring 1, level 9 at ring 2
-    const presentLevels = [...new Set(
-      subtree
-        .filter((n) => n.id !== activeSectorId && !n.isSector && n.level > 0)
-        .map((n) => n.level)
-    )].sort((a, b) => a - b);
-    const levelToRing = new Map(presentLevels.map((lvl, i) => [lvl, i + 1]));
-
-    // Clear sector root's parentId so it renders at center (depth 0)
-    const relabeled = subtree.map((n) =>
-      n.id === activeSectorId ? { ...n, parentId: null } : n
-    );
-
-    const getDepth = (node: OrgNode, bfsDepth: number) => {
-      const ring = levelToRing.get(node.level);
-      return ring !== undefined ? ring : bfsDepth; // fallback: sub-sectors use BFS depth
-    };
-
-    const pos = calculateLayout(relabeled, SECTOR_RING_RADII, SECTOR_NODE_RADIUS, getDepth);
+    // Compressed level→ring mapping: only present levels get consecutive rings.
+    // Dynamic radii ensure nodes never overlap when a level has many people.
+    const pos  = calculateEvenSectorLayout(subtree, activeSectorId, SECTOR_RING_RADII, SECTOR_NODE_RADIUS);
     const conn = calculateConnections(pos);
     return { pos, conn };
   }, [activeSectorId, allNodes]);
+
+  // Animate viewBox when switching views — fit to content for sector detail
+  useEffect(() => {
+    if (!activeSectorId) {
+      animateTo(OVERVIEW_VB, 700);
+      return;
+    }
+    if (!sectorDetail) return;
+    // Fit initial view to the outermost ring actually populated
+    const maxR = sectorDetail.pos.reduce(
+      (m, p) => Math.max(m, Math.sqrt(p.x * p.x + p.y * p.y) + p.radius + 80), 200,
+    );
+    const size = Math.min(Math.max(maxR * 2, 2200), 4000);
+    animateTo({ x: -size / 2, y: -size / 2, w: size, h: size }, 700);
+  }, [activeSectorId, sectorDetail, animateTo]);
 
   // ── Overview derived data ─────────────────────────────────────────────
   const overviewDirectors = useMemo(() => positions.filter((p) => p.level === 0), [positions]);
@@ -156,6 +147,22 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   // ── Sector detail derived data ────────────────────────────────────────
   const detailCenter  = useMemo(() => sectorDetail?.pos.find((p) => p.id === activeSectorId) ?? null, [sectorDetail, activeSectorId]);
   const detailOthers  = useMemo(() => sectorDetail?.pos.filter((p) => p.id !== activeSectorId) ?? [], [sectorDetail, activeSectorId]);
+
+  // Ring guide circles — only populated rings, at their actual dynamic radius
+  const sectorRingGuides = useMemo(() => {
+    if (!sectorDetail || !activeSectorId) return [];
+    const byRadius = new Map<number, number>(); // radius → min level
+    sectorDetail.pos.forEach((p) => {
+      if (p.id === activeSectorId) return;
+      const r = Math.round(Math.sqrt(p.x * p.x + p.y * p.y));
+      if (r < 10) return;
+      const cur = byRadius.get(r);
+      if (cur === undefined || p.level < cur) byRadius.set(r, p.level);
+    });
+    return [...byRadius.entries()]
+      .sort(([ra], [rb]) => ra - rb)
+      .map(([r, level]) => ({ r, level }));
+  }, [activeSectorId, sectorDetail]);
 
   const visibleDetailOthers = useMemo(() => {
     const { x, y, w, h } = vb;
@@ -355,9 +362,19 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   };
 
   // ── Zoom buttons ──────────────────────────────────────────────────────
-  const zoomIn    = () => { const c = vbRef.current; const nW = Math.max(minW, c.w * 0.78); const nH = (nW / c.w) * c.h; animateTo({ x: c.x + (c.w - nW) / 2, y: c.y + (c.h - nH) / 2, w: nW, h: nH }, 300); };
-  const zoomOut   = () => { const c = vbRef.current; const nW = Math.min(maxW, c.w * 1.28); const nH = (nW / c.w) * c.h; animateTo({ x: c.x - (nW - c.w) / 2, y: c.y - (nH - c.h) / 2, w: nW, h: nH }, 300); };
-  const resetView = () => animateTo(activeSectorId ? SECTOR_VB : OVERVIEW_VB, 500);
+  const zoomIn  = () => { const c = vbRef.current; const nW = Math.max(minW, c.w * 0.78); const nH = (nW / c.w) * c.h; animateTo({ x: c.x + (c.w - nW) / 2, y: c.y + (c.h - nH) / 2, w: nW, h: nH }, 300); };
+  const zoomOut = () => { const c = vbRef.current; const nW = Math.min(maxW, c.w * 1.28); const nH = (nW / c.w) * c.h; animateTo({ x: c.x - (nW - c.w) / 2, y: c.y - (nH - c.h) / 2, w: nW, h: nH }, 300); };
+  const resetView = () => {
+    if (activeSectorId && sectorDetail) {
+      const maxR = sectorDetail.pos.reduce(
+        (m, p) => Math.max(m, Math.sqrt(p.x * p.x + p.y * p.y) + p.radius + 80), 200,
+      );
+      const size = Math.min(Math.max(maxR * 2, 2200), 4000);
+      animateTo({ x: -size / 2, y: -size / 2, w: size, h: size }, 500);
+    } else {
+      animateTo(OVERVIEW_VB, 500);
+    }
+  };
 
   const vbStr = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
 
@@ -894,9 +911,9 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
 
         {/* Ring guides */}
         {activeSectorId
-          ? Object.entries(SECTOR_RING_RADII).filter(([d]) => Number(d) > 0).map(([d, r]) => (
-              <circle key={d} cx={0} cy={0} r={r}
-                fill="none" stroke={levelColors[Number(d) + 2] ?? '#fff'}
+          ? sectorRingGuides.map(({ r, level }) => (
+              <circle key={r} cx={0} cy={0} r={r}
+                fill="none" stroke={levelColors[level] ?? '#fff'}
                 strokeOpacity={0.25} strokeWidth={1.5} strokeDasharray="6 5" />
             ))
           : Array.from({ length: maxLevel }, (_, i) => i + 1).map((lv) => {
