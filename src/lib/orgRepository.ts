@@ -43,9 +43,9 @@ function rowToNode(row: DbRow): OrgNode {
   };
 }
 
-/** Atalho para a tabela de nós no schema correto. */
+/** Atalho para a view de nós no schema correto. */
 const table = (supabase: SupabaseClient) =>
-  supabase.schema('organograma').from('org_nodes');
+  supabase.schema('organograma').from('org_nodes_from_rh');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Leitura
