@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Avatar from '@/components/ui/Avatar';
 import { createOrgNode, updateOrgNode } from '@/lib/orgApi';
 import { generateNodeId } from '@/lib/nodeUtils';
@@ -11,8 +11,8 @@ import styles from './modals.module.css';
 interface DirectorModalProps {
   /** Diretoria a editar. Null quando está criando uma nova. */
   directorBeingEdited: OrgNode | null;
-  /** Lista de todos os setores, para vincular diretores de setor. */
-  allSectors:          OrgNode[];
+  /** Já existe uma Diretoria central? Em caso afirmativo, bloqueia criar outra. */
+  centralDirectorExists?: boolean;
   onClose:             () => void;
   onDeleteClick:       (id: string, label: string) => void;
   setNodes:            React.Dispatch<React.SetStateAction<OrgNode[]>>;
@@ -25,16 +25,12 @@ interface DirectorModalProps {
 }
 
 /**
- * Modal para criar ou editar uma Diretoria.
- *
- * Suporta três configurações:
- * - Central: aparece no centro do organograma
- * - De setor: vinculado a um setor específico
- * - Compartilhado (casal): dois nomes exibidos como "Nome1 & Nome2"
+ * Modal para criar ou editar uma Diretoria (nível 0, sempre central).
+ * Suporta modo individual ou compartilhado (casal: "Nome1 & Nome2").
  */
 export default function DirectorModal({
   directorBeingEdited,
-  allSectors,
+  centralDirectorExists = false,
   onClose,
   onDeleteClick,
   setNodes,
@@ -46,32 +42,21 @@ export default function DirectorModal({
 }: DirectorModalProps) {
   const isEditing    = directorBeingEdited !== null;
   const isSharedName = directorBeingEdited?.name.includes(' & ') ?? false;
+  const nameParts    = directorBeingEdited?.name.split(' & ') ?? [];
 
-  const nameParts = directorBeingEdited?.name.split(' & ') ?? [];
-
-  const [isSharedDirector, setIsSharedDirector]         = useState(isSharedName);
-  const [linkedSectorId,   setLinkedSectorId]           = useState<string | null>(directorBeingEdited?.sectorDirectorOf ?? null);
-  const [form,             setForm]                     = useState({
+  const [isSharedDirector, setIsSharedDirector] = useState(isSharedName);
+  const [form, setForm] = useState({
     name1:    isEditing ? (isSharedName ? (nameParts[0] ?? '') : directorBeingEdited!.name) : '',
     name2:    isSharedName ? (nameParts[1] ?? '') : '',
     role:     directorBeingEdited?.role     ?? 'Diretoria',
     photoUrl: directorBeingEdited?.photoUrl ?? '',
   });
 
-  const sortedSectors = useMemo(
-    () => [...allSectors].sort((a, b) => a.level - b.level || a.name.localeCompare(b.name)),
-    [allSectors],
-  );
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  function toggleSectorLinked(isSector: boolean) {
-    setLinkedSectorId(isSector ? (sortedSectors[0]?.id ?? '') : null);
-  }
 
   /** Nome final a ser salvo: "A & B" para compartilhado, ou só "A". */
   const resolvedName = isSharedDirector
@@ -83,17 +68,19 @@ export default function DirectorModal({
       showToast('Preencha todos os campos obrigatórios.', 'error');
       return;
     }
-    if (linkedSectorId !== null && !linkedSectorId) {
-      showToast('Selecione o setor desta diretoria.', 'error');
+
+    // Regra: só pode haver UMA Diretoria central. Do 2º diretor em diante,
+    // cadastre como Diretor de Setor (dentro de um setor), nunca no centro.
+    if (!isEditing && centralDirectorExists) {
+      showToast('Já existe uma Diretoria central. Cadastre diretores adicionais como Diretor de Setor.', 'error');
       return;
     }
 
     const nodeId = isEditing ? directorBeingEdited!.id : generateNodeId('director');
     const patch = {
-      name:             resolvedName,
-      role:             form.role,
-      photoUrl:         form.photoUrl || undefined,
-      sectorDirectorOf: linkedSectorId ?? null,
+      name:     resolvedName,
+      role:     form.role,
+      photoUrl: form.photoUrl || undefined,
     };
 
     // Atualização otimista
@@ -135,71 +122,30 @@ export default function DirectorModal({
           <button type="button" className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {/* Posição no organograma: central ou de setor */}
-        <div className={styles.dirTypeSection}>
-          <span className={styles.dirTypeLabel}>Posição no organograma</span>
-          <div className={styles.sharedToggle}>
-            <button
-              type="button"
-              className={`${styles.toggleBtn} ${linkedSectorId === null ? styles.toggleBtnOn : ''}`}
-              onClick={() => toggleSectorLinked(false)}
-            >
-              Central — centro da tela
-            </button>
-            <button
-              type="button"
-              className={`${styles.toggleBtn} ${linkedSectorId !== null ? styles.toggleBtnOn : ''}`}
-              onClick={() => toggleSectorLinked(true)}
-            >
-              De setor — aparece no setor
-            </button>
-          </div>
-
-          {linkedSectorId !== null && (
-            <label className={styles.label} style={{ marginTop: 10 }}>
-              Setor gerenciado *
-              <select
-                className={styles.select}
-                value={linkedSectorId}
-                onChange={e => setLinkedSectorId(e.target.value)}
-              >
-                <option value="">— selecione —</option>
-                {sortedSectors.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}{s.level > 2 ? ' (sub-setor)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+        {/* Toggle individual / compartilhado */}
+        <div className={styles.sharedToggle}>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${!isSharedDirector ? styles.toggleBtnOn : ''}`}
+            onClick={() => setIsSharedDirector(false)}
+          >
+            Individual
+          </button>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${isSharedDirector ? styles.toggleBtnOn : ''}`}
+            onClick={() => setIsSharedDirector(true)}
+          >
+            Compartilhado (casal)
+          </button>
         </div>
-
-        {/* Toggle individual / compartilhado (só para diretorias centrais) */}
-        {linkedSectorId === null && (
-          <div className={styles.sharedToggle}>
-            <button
-              type="button"
-              className={`${styles.toggleBtn} ${!isSharedDirector ? styles.toggleBtnOn : ''}`}
-              onClick={() => setIsSharedDirector(false)}
-            >
-              Individual
-            </button>
-            <button
-              type="button"
-              className={`${styles.toggleBtn} ${isSharedDirector ? styles.toggleBtnOn : ''}`}
-              onClick={() => setIsSharedDirector(true)}
-            >
-              Compartilhado (casal)
-            </button>
-          </div>
-        )}
 
         <div className={styles.modalAvatarRow}>
           <Avatar photoUrl={form.photoUrl} name={resolvedName || '?'} size={72} color={levelColors[0]} />
         </div>
 
         {/* Campos de nome */}
-        {isSharedDirector && linkedSectorId === null ? (
+        {isSharedDirector ? (
           <div className={styles.modalGrid}>
             <label className={styles.label}>
               Nome — Pessoa 1 *
@@ -229,7 +175,7 @@ export default function DirectorModal({
               className={styles.input}
               value={form.name1}
               onChange={e => setForm(f => ({ ...f, name1: e.target.value }))}
-              placeholder={linkedSectorId !== null ? 'Ex: Ana Souza' : 'Ex: Maria da Silva'}
+              placeholder="Ex: Maria da Silva"
             />
           </label>
         )}
@@ -240,12 +186,12 @@ export default function DirectorModal({
             className={styles.input}
             value={form.role}
             onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-            placeholder={linkedSectorId !== null ? 'Ex: Diretora Financeira' : 'Ex: Diretora Executiva'}
+            placeholder="Ex: Diretora Executiva"
           />
         </label>
 
         <label className={styles.label}>
-          URL da foto{isSharedDirector && linkedSectorId === null ? ' (foto do casal)' : ''}
+          URL da foto{isSharedDirector ? ' (foto do casal)' : ''}
           <input
             className={styles.input}
             value={form.photoUrl}
@@ -254,7 +200,7 @@ export default function DirectorModal({
           />
         </label>
 
-        {isSharedDirector && linkedSectorId === null && resolvedName && (
+        {isSharedDirector && resolvedName && (
           <p className={styles.sharedHint}>
             Será exibido como: <strong>&quot;{resolvedName}&quot;</strong>
           </p>

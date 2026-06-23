@@ -135,8 +135,6 @@ interface AddSubSectorModalProps {
   parentSectorId:    string;
   /** Nome do setor pai para exibir no título. */
   parentSectorName:  string | undefined;
-  /** Nível do setor pai (sub-setor terá level + 1). */
-  parentSectorLevel: number;
   setNodes:          React.Dispatch<React.SetStateAction<OrgNode[]>>;
   onClose:           () => void;
   markSyncing:       (id: string) => void;
@@ -149,7 +147,6 @@ interface AddSubSectorModalProps {
 export function AddSubSectorModal({
   parentSectorId,
   parentSectorName,
-  parentSectorLevel,
   setNodes,
   onClose,
   markSyncing,
@@ -177,7 +174,7 @@ export function AddSubSectorModal({
       id:          newId,
       name,
       role:        'Sub-setor',
-      level:       parentSectorLevel + 1,
+      level:       3,
       parentId:    parentSectorId,
       isSector:    true,
       sectorColor,

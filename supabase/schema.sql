@@ -96,6 +96,8 @@ CREATE TABLE IF NOT EXISTS organograma.unidades (
   CONSTRAINT uq_unidades_nome UNIQUE (nome)
 ) TABLESPACE pg_default;
 
+CREATE INDEX IF NOT EXISTS idx_unidades_deleted_at ON organograma.unidades (deleted_at) WHERE (deleted_at IS NULL);
+
 DROP TRIGGER IF EXISTS trg_unidades_updated_at ON organograma.unidades;
 CREATE TRIGGER trg_unidades_updated_at
   BEFORE UPDATE ON organograma.unidades
@@ -120,6 +122,8 @@ CREATE TABLE IF NOT EXISTS organograma.cargos (
   CONSTRAINT uq_cargos_nome UNIQUE (nome),
   CONSTRAINT ck_cargos_nivel CHECK (nivel >= 0)
 ) TABLESPACE pg_default;
+
+CREATE INDEX IF NOT EXISTS idx_cargos_deleted_at ON organograma.cargos (deleted_at) WHERE (deleted_at IS NULL);
 
 DROP TRIGGER IF EXISTS trg_cargos_updated_at ON organograma.cargos;
 CREATE TRIGGER trg_cargos_updated_at
@@ -150,6 +154,9 @@ CREATE TABLE IF NOT EXISTS organograma.setores (
   )
 ) TABLESPACE pg_default;
 
+CREATE INDEX IF NOT EXISTS idx_setores_id_unidade  ON organograma.setores (id_unidade);
+CREATE INDEX IF NOT EXISTS idx_setores_deleted_at   ON organograma.setores (deleted_at) WHERE (deleted_at IS NULL);
+
 DROP TRIGGER IF EXISTS trg_setores_updated_at ON organograma.setores;
 CREATE TRIGGER trg_setores_updated_at
   BEFORE UPDATE ON organograma.setores
@@ -157,13 +164,16 @@ CREATE TRIGGER trg_setores_updated_at
 
 -- ============================================================
 -- TABLE: funcionarios
+-- Nota: id_cargo / id_setor / id_unidade são referências
+-- sem FK declarada (apenas índices) para permitir flexibilidade
+-- de cadastro independente.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS organograma.funcionarios (
   id                uuid                     NOT NULL DEFAULT gen_random_uuid(),
   nome_completo     character varying(255)   NOT NULL,
-  id_cargo          uuid                     NOT NULL REFERENCES organograma.cargos(id),
-  id_setor          uuid                     NOT NULL REFERENCES organograma.setores(id),
-  id_unidade        uuid                     NOT NULL REFERENCES organograma.unidades(id),
+  id_cargo          uuid                     NOT NULL,
+  id_setor          uuid                     NOT NULL,
+  id_unidade        uuid                     NOT NULL,
   cpf               character varying(11),
   rg                character varying(20),
   cnpj              character varying(18),
@@ -219,6 +229,11 @@ CREATE TABLE IF NOT EXISTS organograma.funcionarios (
     cpf IS NULL OR (cpf)::text ~ '^[0-9]{11}$'
   )
 ) TABLESPACE pg_default;
+
+CREATE INDEX IF NOT EXISTS idx_funcionarios_id_cargo    ON organograma.funcionarios (id_cargo);
+CREATE INDEX IF NOT EXISTS idx_funcionarios_id_setor    ON organograma.funcionarios (id_setor);
+CREATE INDEX IF NOT EXISTS idx_funcionarios_id_unidade  ON organograma.funcionarios (id_unidade);
+CREATE INDEX IF NOT EXISTS idx_funcionarios_deleted_at  ON organograma.funcionarios (deleted_at) WHERE (deleted_at IS NULL);
 
 DROP TRIGGER IF EXISTS trg_funcionarios_updated_at ON organograma.funcionarios;
 CREATE TRIGGER trg_funcionarios_updated_at

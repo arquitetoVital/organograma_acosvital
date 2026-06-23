@@ -19,7 +19,7 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
   const [nodes, setNodes] = useState<OrgNode[]>(initialNodes);
 
   const overviewNodes = useMemo(
-    () => nodes.filter((n) => n.level <= 2 && !n.sectorDirectorOf),
+    () => nodes.filter((n) => n.level <= 2),
     [nodes],
   );
   const positions = useMemo(

@@ -52,10 +52,8 @@ export default function PersonModal({
 }: PersonModalProps) {
   const sectorNode = targetSectorId ? nodeMap.get(targetSectorId) : null;
 
-  // Nível mínimo que uma pessoa pode ter dentro deste setor
-  const minimumPersonLevel = (sectorNode?.isSector && (sectorNode.level ?? 2) > 2)
-    ? sectorNode.level + 1
-    : 3;
+  // Pessoas sempre começam no nível 4 (Diretor de Setor) independente do setor pai
+  const minimumPersonLevel = 4;
 
   // Todos os nós que pertencem à subárvore do setor alvo
   const sectorSubtree = useMemo(() => {
@@ -226,7 +224,7 @@ export default function PersonModal({
               value={form.level}
               onChange={e => changeLevel(Number(e.target.value))}
             >
-              {Array.from({ length: 10 - minimumPersonLevel }, (_, i) => i + minimumPersonLevel).map(lvl => (
+              {Array.from({ length: 12 - minimumPersonLevel }, (_, i) => i + minimumPersonLevel).map(lvl => (
                 <option key={lvl} value={lvl}>{lvl} — {levelNames[lvl]}</option>
               ))}
             </select>

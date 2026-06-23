@@ -8,7 +8,7 @@ export interface OrgNode {
   photoUrl?: string;
   isSector?: boolean;
   sectorColor?: string;
-  sectorDirectorOf?: string | null;
+  funcionarioId?: string | null;
 }
 
 export interface PositionedNode extends OrgNode {
