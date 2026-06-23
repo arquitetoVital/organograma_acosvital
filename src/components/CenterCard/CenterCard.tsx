@@ -38,6 +38,10 @@ export default function CenterCard({ node, color }: Props) {
       <title>{node.name} — {node.role}</title>
 
       <defs>
+        <radialGradient id="grad-center" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.35} />
+          <stop offset="100%" stopColor="#142133" stopOpacity={1} />
+        </radialGradient>
         <clipPath id="clip-center">
           <circle cx={0} cy={0} r={CR - 1} />
         </clipPath>
@@ -70,8 +74,8 @@ export default function CenterCard({ node, color }: Props) {
         className={styles.border}
       />
 
-      {/* Background */}
-      <circle cx={0} cy={0} r={CR} style={{ fill: 'var(--bg-deep)' }} />
+      {/* Background com gradiente da cor do nível */}
+      <circle cx={0} cy={0} r={CR} fill="url(#grad-center)" />
 
       {/* Initials fallback */}
       <text

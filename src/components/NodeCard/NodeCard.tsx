@@ -42,22 +42,27 @@ function NodeCardInner({ node, color, vbW }: Props) {
     <g transform={`translate(${node.x}, ${node.y})`} className={styles.group}>
       <title>{node.name} — {node.role}</title>
 
-      {showImage && (
-        <defs>
+      <defs>
+        <radialGradient id={`grad-${node.id}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor={color} stopOpacity={0.22} />
+          <stop offset="100%" stopColor="#142133" stopOpacity={1} />
+        </radialGradient>
+        {showImage && (
           <clipPath id={clipId}>
             <circle cx={0} cy={0} r={r - 1} />
           </clipPath>
-        </defs>
-      )}
+        )}
+      </defs>
 
-      {/* Outer glow */}
-      <circle cx={0} cy={0} r={r + 5} fill={color} fillOpacity={0.07} />
+      {/* Outer glow (neon em camadas) */}
+      <circle cx={0} cy={0} r={r + 12} fill={color} fillOpacity={0.06} />
+      <circle cx={0} cy={0} r={r + 5}  fill={color} fillOpacity={0.16} />
 
       {/* Border */}
       <circle cx={0} cy={0} r={r + 2} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.75} className={styles.ring} />
 
-      {/* Background */}
-      <circle cx={0} cy={0} r={r} style={{ fill: 'var(--bg-deep)' }} />
+      {/* Background com gradiente da cor do nível */}
+      <circle cx={0} cy={0} r={r} fill={`url(#grad-${node.id})`} />
 
       {/* Initials fallback */}
       {!showImage && (
