@@ -1,52 +1,46 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import GlobeExplorer from '@/components/Globe/GlobeExplorer';
-import { ClientPoint, OmieClient, fromOmie } from '@/types/client';
+import type { ApiCliente, ClientPoint } from '@/types/client';
+import { toClientPoint } from '@/types/client';
 
-const STORAGE_KEY = 'vital-clients-v2';
-
-function loadFromStorage(): ClientPoint[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as ClientPoint[];
-  } catch {}
-  return [];
+function buildPoints(clientes: ApiCliente[]): ClientPoint[] {
+  return clientes
+    .filter(c => c.latitude_y != null && c.longitude_x != null)
+    .map(c => toClientPoint(c, Number(c.latitude_y), Number(c.longitude_x)));
 }
 
-export default function ClientesView() {
-  const [clients, setClients] = useState<ClientPoint[]>([]);
+interface ClientesViewProps {
+  canViewDetails?: boolean;
+}
+
+export default function ClientesView({ canViewDetails = false }: ClientesViewProps) {
+  const [points,  setPoints]  = useState<ClientPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
+    let cancelled = false;
 
-    const stored = loadFromStorage();
-    if (stored.length > 0) setClients(stored);
-
-    setLoading(true);
-    fetch('/data/clients.json')
-      .then((r) => (r.ok ? (r.json() as Promise<OmieClient[]>) : Promise.reject()))
-      .then((data) => {
-        setClients((prev) => {
-          const existingIds = new Set(prev.map((c) => c.id));
-          const newOnes = data.map(fromOmie).filter((c) => !existingIds.has(c.id));
-          return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-        });
+    fetch('/api/clientes-mapa')
+      .then(r => r.json())
+      .then((json: { clientes: ApiCliente[] }) => {
+        if (!cancelled) setPoints(buildPoints(json.clientes ?? []));
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, []);
 
   return (
     <GlobeExplorer
-      points={clients}
+      points={points}
       theme="vital"
       loading={loading}
       itemLabel={{ singular: 'cliente', plural: 'clientes' }}
       loadingText="Carregando clientes…"
+      readOnly={!canViewDetails}
     />
   );
 }

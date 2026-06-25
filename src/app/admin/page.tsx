@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { IcoUsers, IcoBriefcase, IcoLayers, IcoBuilding, IcoGlobe, IcoArrowRight } from './_icons';
 import styles from './hub.module.css';
 
 export const metadata: Metadata = {
@@ -8,25 +9,39 @@ export const metadata: Metadata = {
 
 const CARDS = [
   {
-    href:       '/admin/organograma',
-    icon:       '👥',
-    title:      'Organograma',
-    desc:       'Cadastrar e editar pessoas, setores e hierarquias da empresa',
+    href:       '/admin/funcionarios',
+    icon:       <IcoUsers size={28} />,
+    title:      'Funcionários',
+    desc:       'Cadastrar funcionários — gera automaticamente o nó no organograma',
     colorStyle: styles.cardBlue,
   },
   {
-    href:       '/admin/clientes',
-    icon:       '🌍',
-    title:      'Clientes',
-    desc:       'Adicionar e gerenciar clientes no mapa global',
-    colorStyle: styles.cardRed,
+    href:       '/admin/cargos',
+    icon:       <IcoBriefcase size={28} />,
+    title:      'Cargos',
+    desc:       'Gerenciar cargos e seus níveis hierárquicos',
+    colorStyle: styles.cardPurple,
   },
   {
-    href:       '/admin/unidades',
-    icon:       '🏢',
+    href:       '/admin/setores',
+    icon:       <IcoLayers size={24} />,
+    title:      'Setores',
+    desc:       'Criar e organizar setores e sub-setores da empresa',
+    colorStyle: styles.cardOrange,
+  },
+  {
+    href:       '/admin/unidades/cadastro',
+    icon:       <IcoBuilding size={24} />,
     title:      'Unidades',
-    desc:       'Cadastrar e gerenciar as filiais e unidades no mapa',
+    desc:       'Cadastrar matrizes e filiais da empresa',
     colorStyle: styles.cardGreen,
+  },
+  {
+    href:       '/admin/clientes',
+    icon:       <IcoGlobe size={24} />,
+    title:      'Clientes',
+    desc:       'Visualizar e buscar clientes integrados via Omie',
+    colorStyle: styles.cardRed,
   },
 ] as const;
 
@@ -45,7 +60,7 @@ export default function AdminHubPage() {
               <div className={styles.cardIcon}>{card.icon}</div>
               <p className={styles.cardTitle}>{card.title}</p>
               <p className={styles.cardDesc}>{card.desc}</p>
-              <span className={styles.cardArrow}>→</span>
+              <span className={styles.cardArrow}><IcoArrowRight size={16} /></span>
             </Link>
           ))}
         </div>

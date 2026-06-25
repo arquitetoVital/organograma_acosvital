@@ -14,13 +14,17 @@ interface Props {
   loading: boolean;
   itemLabel: { singular: string; plural: string };
   loadingText: string;
+  /** Quando true, esconde a lista e o painel de detalhes individuais. */
+  readOnly?: boolean;
+  /** Busca dados extras ao selecionar um ponto e enriquece `selected`. */
+  loadDetail?: (p: ClientPoint) => Promise<ClientPoint>;
 }
 
 /**
  * Explorador de globo reutilizável: globo + painel lateral pesquisável com
  * filtro por região, distribuição e "voar até" sincronizado.
  */
-export default function GlobeExplorer({ points, theme, loading, itemLabel, loadingText }: Props) {
+export default function GlobeExplorer({ points, theme, loading, itemLabel, loadingText, readOnly = false, loadDetail }: Props) {
   const [region, setRegion]   = useState<RegionFilter>('ALL');
   const [query, setQuery]     = useState('');
   const [panelOpen, setPanel] = useState(true);
@@ -65,8 +69,12 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
   // (sem modal cobrindo o globo).
   const handleSelect = useCallback((p: ClientPoint) => {
     setFocus({ lat: p.lat, lon: p.lon, nonce: Date.now() });
+    if (readOnly) return;
     setSelected(p);
-  }, []);
+    if (loadDetail) {
+      loadDetail(p).then(setSelected).catch(() => {});
+    }
+  }, [readOnly, loadDetail]);
 
   // Clique na marcação vermelha: seleciona a empresa no painel em vez de abrir
   // um modal. Em grupos com várias empresas, foca a primeira.
@@ -151,6 +159,7 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
           selected={selected}
           onBack={() => setSelected(null)}
           onFocus={(p) => setFocus({ lat: p.lat, lon: p.lon, nonce: Date.now() })}
+          readOnly={readOnly}
         />
       )}
     </div>

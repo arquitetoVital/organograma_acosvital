@@ -7,12 +7,13 @@ import styles from './SidebarShell.module.css';
 
 interface Props {
   isAdmin: boolean;
+  userEmail?: string;
   children: React.ReactNode;
 }
 
 const HIDDEN_PATHS = ['/login'];
 
-export default function SidebarShell({ isAdmin, children }: Props) {
+export default function SidebarShell({ isAdmin, userEmail, children }: Props) {
   const pathname = usePathname();
   const [isFs, setIsFs] = useState(false);
 
@@ -28,7 +29,7 @@ export default function SidebarShell({ isAdmin, children }: Props) {
 
   return (
     <div className={styles.shell}>
-      {!isFs && <Sidebar isAdmin={isAdmin} />}
+      <Sidebar isAdmin={isAdmin} userEmail={userEmail} floating={isFs} />
       <div className={styles.content}>{children}</div>
     </div>
   );

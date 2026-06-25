@@ -17,7 +17,7 @@ export const levelNames: Record<number, string> = {
   5:  'Gerência de Setor',
   6:  'Coordenação',
   7:  'Supervisão',
-  8:  'Liderança',
+  8:  'Líder de Equipe',
   9:  'Analista / Técnico',
   10: 'Assistente / Auxiliar',
   11: 'Aprendiz',

@@ -8,6 +8,10 @@ import { LOGO_URL } from '@/lib/constants';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import styles from './Sidebar.module.css';
 
+const ICON_LOGO_URL =
+  'https://iaczridaljcdtnthoece.supabase.co/storage/v1/object/public/public-assets/geral/logo/logo_icone_apenas.png';
+
+// ── Ícones ────────────────────────────────────────────────────────────────
 function IconOrg() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -18,17 +22,14 @@ function IconOrg() {
     </svg>
   );
 }
-
 function IconBuilding() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/>
-      <path d="M2 22h20"/>
+      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M2 22h20"/>
       <path d="M10 7h4M10 11h4M10 15h4"/>
     </svg>
   );
 }
-
 function IconUsers() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -39,7 +40,6 @@ function IconUsers() {
     </svg>
   );
 }
-
 function IconSettings() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -48,23 +48,77 @@ function IconSettings() {
     </svg>
   );
 }
+function IconLogout() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+  );
+}
+function IconFullscreen({ exit }: { exit: boolean }) {
+  return exit ? (
+    <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+      <path d="M5 1H2v3M10 1h3v3M13 10v3h-3M5 14H2v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ) : (
+    <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+      <path d="M1 5V1h4M10 1h4v4M14 10v4h-4M5 14H1v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+function IconChevron({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transition: 'transform 280ms', transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}
+    >
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
 
+// ── Rotas ────────────────────────────────────────────────────────────────
 const NAV = [
-  { href: '/',         label: 'Organograma', sub: 'Estrutura da empresa', Icon: IconOrg      },
-  { href: '/unidades', label: 'Unidades',    sub: 'Mapa de unidades',     Icon: IconBuilding },
-  { href: '/clientes', label: 'Clientes',    sub: 'Mapa de clientes',     Icon: IconUsers    },
+  { href: '/',         label: 'Organograma', Icon: IconOrg      },
+  { href: '/unidades', label: 'Unidades',    Icon: IconBuilding },
+  { href: '/clientes', label: 'Clientes',    Icon: IconUsers    },
 ] as const;
 
-export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
-  const pathname  = usePathname();
-  const [isFs,    setIsFs]    = useState(false);
-  const [pending, setPending] = useState(false);
+const ADMIN_SUB = [
+  { href: '/admin/funcionarios',       label: 'Funcionários' },
+  { href: '/admin/cargos',             label: 'Cargos'       },
+  { href: '/admin/setores',            label: 'Setores'      },
+  { href: '/admin/unidades/cadastro',  label: 'Unidades'     },
+  { href: '/admin/clientes',           label: 'Clientes'     },
+];
+
+// ── Componente ────────────────────────────────────────────────────────────
+interface Props {
+  isAdmin: boolean;
+  userEmail?: string;
+  /** Em tela cheia o sidebar flutua sobre o conteúdo */
+  floating?: boolean;
+}
+
+export default function Sidebar({ isAdmin, userEmail, floating = false }: Props) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [isFs, setIsFs]           = useState(false);
+  const [pending, setPending]     = useState(false);
 
   useEffect(() => {
     const onChange = () => setIsFs(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
+
+  // Ao entrar em tela cheia: colapsa automaticamente para ocupar menos espaço
+  useEffect(() => {
+    if (floating) setCollapsed(true);
+  }, [floating]);
 
   const toggleFs = useCallback(async () => {
     try {
@@ -78,29 +132,54 @@ export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
     await signOut();
   }
 
-  return (
-    <aside className={styles.sidebar}>
+  const username = userEmail ? userEmail.split('@')[0] : 'usuário';
+  const initials = username.slice(0, 2).toUpperCase();
 
-      {/* ── Logo ── */}
+  const cls = [
+    styles.sidebar,
+    collapsed ? styles.collapsed : '',
+    floating  ? styles.floating  : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <aside className={cls}>
+
+      {/* ── Brand ──────────────────────────────────────────────────────── */}
       <div className={styles.brand}>
+        {/* Logo completo — visível quando expandido */}
         <img src={LOGO_URL} alt="Açosvital" className={styles.logo} />
+
+        {/* Logo ícone — visível quando colapsado ou flutuante */}
+        <img src={ICON_LOGO_URL} alt="Açosvital" className={styles.logoIcon} />
+
+        {/* Botão de colapso — oculto em modo flutuante */}
+        {!floating && (
+          <button
+            className={styles.collapseBtn}
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <IconChevron collapsed={collapsed} />
+          </button>
+        )}
       </div>
 
-      {/* ── Navegação ── */}
+      {/* ── Navegação ─────────────────────────────────────────────────── */}
       <nav className={styles.nav}>
-        <span className={styles.navSection}>Navegação</span>
+        <span className={styles.sectionLabel}>Menu</span>
         <ul className={styles.navList}>
-          {NAV.map(({ href, label, sub, Icon }) => {
+          {NAV.map(({ href, label, Icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
               <li key={href}>
-                <Link href={href} className={`${styles.navItem} ${active ? styles.active : ''}`}>
-                  <span className={styles.navIcon}><Icon /></span>
-                  <span className={styles.navText}>
-                    <span className={styles.navLabel}>{label}</span>
-                    <span className={styles.navSub}>{sub}</span>
-                  </span>
+                <Link
+                  href={href}
+                  className={`${styles.navItem} ${active ? styles.active : ''}`}
+                  title={collapsed ? label : undefined}
+                >
                   {active && <span className={styles.activePip} />}
+                  <span className={styles.navIcon}><Icon /></span>
+                  <span className={styles.navLabel}>{label}</span>
                 </Link>
               </li>
             );
@@ -110,25 +189,23 @@ export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
 
       <div className={styles.spacer} />
 
-      {/* ── Admin ── */}
+      {/* ── Administração ─────────────────────────────────────────────── */}
       {isAdmin && (
         <div className={styles.adminSection}>
-          <Link href="/admin" className={`${styles.navItem} ${pathname.startsWith('/admin') ? styles.active : ''}`}>
-            <span className={styles.navIcon}><IconSettings /></span>
-            <span className={styles.navText}>
-              <span className={styles.navLabel}>Administrar</span>
-              <span className={styles.navSub}>Administração</span>
-            </span>
+          <span className={styles.sectionLabel}>Configurações</span>
+          <Link
+            href="/admin"
+            className={`${styles.navItem} ${pathname.startsWith('/admin') ? styles.active : ''}`}
+            title={collapsed ? 'Administrar' : undefined}
+          >
             {pathname.startsWith('/admin') && <span className={styles.activePip} />}
+            <span className={styles.navIcon}><IconSettings /></span>
+            <span className={styles.navLabel}>Administrar</span>
           </Link>
 
-          {pathname.startsWith('/admin') && (
+          {pathname.startsWith('/admin') && !collapsed && (
             <ul className={styles.subNav}>
-              {[
-                { href: '/admin/organograma', label: 'Organograma' },
-                { href: '/admin/clientes',    label: 'Clientes'    },
-                { href: '/admin/unidades',    label: 'Unidades'    },
-              ].map(({ href, label }) => (
+              {ADMIN_SUB.map(({ href, label }) => (
                 <li key={href}>
                   <Link
                     href={href}
@@ -143,33 +220,39 @@ export default function Sidebar({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* ── Rodapé ── */}
+      {/* ── Rodapé ────────────────────────────────────────────────────── */}
       <div className={styles.footer}>
-        <ThemeToggle className={styles.footerBtn} />
+        <div className={styles.footerActions}>
+          <ThemeToggle className={styles.footerBtn} />
+          <button
+            onClick={toggleFs}
+            className={styles.footerBtn}
+            title={isFs ? 'Sair da tela cheia' : 'Tela cheia'}
+          >
+            <IconFullscreen exit={isFs} />
+            <span>{isFs ? 'Sair da tela cheia' : 'Tela cheia'}</span>
+          </button>
+        </div>
 
-        <button onClick={toggleFs} className={styles.footerBtn}>
-          {isFs ? (
-            <svg width="13" height="13" viewBox="0 0 15 15" fill="none">
-              <path d="M5 1H2v3M10 1h3v3M13 10v3h-3M5 14H2v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          ) : (
-            <svg width="13" height="13" viewBox="0 0 15 15" fill="none">
-              <path d="M1 5V1h4M10 1h4v4M14 10v4h-4M5 14H1v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          )}
-          {isFs ? 'Sair da tela cheia' : 'Tela cheia'}
-        </button>
+        <div className={styles.footerDivider} />
 
-        <button onClick={handleSignOut} disabled={pending} className={styles.footerBtn}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-          {pending ? 'Saindo…' : 'Sair da conta'}
-        </button>
+        {/* Perfil */}
+        <div className={styles.userCard}>
+          <div className={styles.userAvatar} aria-hidden="true">{initials}</div>
+          <div className={styles.userInfo}>
+            <span className={styles.userName}>{username}</span>
+            {userEmail && <span className={styles.userEmail}>{userEmail}</span>}
+          </div>
+          <button
+            onClick={handleSignOut}
+            disabled={pending}
+            className={styles.logoutBtn}
+            title="Sair da conta"
+          >
+            <IconLogout />
+          </button>
+        </div>
       </div>
-
     </aside>
   );
 }

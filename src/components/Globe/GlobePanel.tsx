@@ -26,17 +26,25 @@ interface Props {
   selected: ClientPoint | null;
   onBack: () => void;
   onFocus: (p: ClientPoint) => void;
+  /** Quando true, oculta a lista e o painel de detalhes individuais. */
+  readOnly?: boolean;
 }
 
 export default function GlobePanel({
-  itemLabel, total, visible, regionCounts, activeRegion, onRegion, query, onQuery, onSelect, accent, selected, onBack, onFocus,
+  itemLabel, total, visible, regionCounts, activeRegion, onRegion, query, onQuery, onSelect, accent, selected, onBack, onFocus, readOnly = false,
 }: Props) {
   const maxRegion = Math.max(1, ...REGIONS.map((r) => regionCounts[r.key] ?? 0));
   const presentRegions = REGIONS.filter((r) => (regionCounts[r.key] ?? 0) > 0);
 
   // ── Página de detalhes da empresa selecionada ──
-  if (selected) {
+  if (selected && !readOnly) {
     const region = regionFromAddress(selected.endereco);
+    const d = selected.detail;
+    const enderecoCompleto = d
+      ? [d.logradouro, d.numero, d.complemento, d.bairro, selected.endereco, d.cep]
+          .filter(Boolean).join(', ')
+      : selected.endereco;
+
     return (
       <aside className={styles.panel}>
         <div className={styles.detailTop}>
@@ -46,8 +54,13 @@ export default function GlobePanel({
         </div>
 
         <div className={styles.detailBody}>
-          <span className={styles.tag} style={{ color: accent }}>{itemLabel.singular}</span>
+          <span className={styles.tag} style={{ color: accent }}>
+            {d?.tipo_unidade === 'matriz' ? 'Matriz' : d?.tipo_unidade === 'filial' ? 'Filial' : itemLabel.singular}
+          </span>
           <h2 className={styles.detailName}>{selected.nome}</h2>
+          {d?.razao_social && d.razao_social !== selected.nome && (
+            <p className={styles.detailSub}>{d.razao_social}</p>
+          )}
           <span className={styles.regionBadge} style={{ color: REGION_COLOR[region], borderColor: REGION_COLOR[region] }}>
             {REGION_LABEL[region]}
           </span>
@@ -55,20 +68,58 @@ export default function GlobePanel({
           <dl className={styles.detailList}>
             <div className={styles.detailRow}>
               <dt>Endereço</dt>
-              <dd>{selected.endereco}</dd>
+              <dd>{enderecoCompleto}</dd>
             </div>
-            <div className={styles.detailRow}>
-              <dt>Coordenadas</dt>
-              <dd className={styles.mono}>{selected.lat.toFixed(5)}, {selected.lon.toFixed(5)}</dd>
-            </div>
-            <div className={styles.detailRow}>
-              <dt>Cód. Omie</dt>
-              <dd className={styles.mono}>{selected.codigo_omie}</dd>
-            </div>
-            <div className={styles.detailRow}>
-              <dt>Origem</dt>
-              <dd>{selected.source === 'manual' ? 'Cadastrado manualmente' : 'Importado do Omie'}</dd>
-            </div>
+            {d?.cnpj && (
+              <div className={styles.detailRow}>
+                <dt>CNPJ</dt>
+                <dd className={styles.mono}>{d.cnpj}</dd>
+              </div>
+            )}
+            {d?.nome_fantasia_matriz && (
+              <div className={styles.detailRow}>
+                <dt>Matriz</dt>
+                <dd>{d.nome_fantasia_matriz}</dd>
+              </div>
+            )}
+            {d?.nome_contato && (
+              <div className={styles.detailRow}>
+                <dt>Contato</dt>
+                <dd>{d.nome_contato}</dd>
+              </div>
+            )}
+            {d?.email && (
+              <div className={styles.detailRow}>
+                <dt>E-mail</dt>
+                <dd>{d.email}</dd>
+              </div>
+            )}
+            {(d?.telefone || d?.celular) && (
+              <div className={styles.detailRow}>
+                <dt>Telefone</dt>
+                <dd>{[d.telefone, d.celular].filter(Boolean).join(' / ')}</dd>
+              </div>
+            )}
+            {d?.homepage && (
+              <div className={styles.detailRow}>
+                <dt>Site</dt>
+                <dd>{d.homepage}</dd>
+              </div>
+            )}
+            {!d && (
+              <>
+                <div className={styles.detailRow}>
+                  <dt>Coordenadas</dt>
+                  <dd className={styles.mono}>{selected.lat.toFixed(5)}, {selected.lon.toFixed(5)}</dd>
+                </div>
+                {(selected.codigo ?? selected.codigo_omie) && (
+                  <div className={styles.detailRow}>
+                    <dt>Cód. Omie</dt>
+                    <dd className={styles.mono}>{selected.codigo ?? selected.codigo_omie}</dd>
+                  </div>
+                )}
+              </>
+            )}
           </dl>
 
           <button type="button" className={styles.focusBtn} style={{ background: accent }} onClick={() => onFocus(selected)}>
@@ -132,39 +183,43 @@ export default function GlobePanel({
         })}
       </div>
 
-      {/* Busca */}
-      <div className={styles.searchWrap}>
-        <svg className={styles.searchIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
-        </svg>
-        <input
-          className={styles.search}
-          placeholder={`Buscar ${itemLabel.singular}…`}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-        />
-        {query && <button type="button" className={styles.clear} onClick={() => onQuery('')} aria-label="Limpar">×</button>}
-      </div>
+      {!readOnly && (
+        <>
+          {/* Busca */}
+          <div className={styles.searchWrap}>
+            <svg className={styles.searchIcon} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input
+              className={styles.search}
+              placeholder={`Buscar ${itemLabel.singular}…`}
+              value={query}
+              onChange={(e) => onQuery(e.target.value)}
+            />
+            {query && <button type="button" className={styles.clear} onClick={() => onQuery('')} aria-label="Limpar">×</button>}
+          </div>
 
-      {/* Lista sincronizada com o globo */}
-      <div className={styles.list}>
-        {visible.length === 0 ? (
-          <div className={styles.empty}>Nenhum {itemLabel.singular} no filtro.</div>
-        ) : (
-          visible.slice(0, 400).map((p) => (
-            <button key={p.id} type="button" className={styles.item} onClick={() => onSelect(p)}>
-              <span className={styles.itemDot} style={{ background: accent }} />
-              <span className={styles.itemText}>
-                <span className={styles.itemName}>{p.nome}</span>
-                <span className={styles.itemAddr}>{p.endereco}</span>
-              </span>
-            </button>
-          ))
-        )}
-        {visible.length > 400 && (
-          <div className={styles.more}>+{(visible.length - 400).toLocaleString('pt-BR')} — refine a busca</div>
-        )}
-      </div>
+          {/* Lista sincronizada com o globo */}
+          <div className={styles.list}>
+            {visible.length === 0 ? (
+              <div className={styles.empty}>Nenhum {itemLabel.singular} no filtro.</div>
+            ) : (
+              visible.slice(0, 400).map((p) => (
+                <button key={p.id} type="button" className={styles.item} onClick={() => onSelect(p)}>
+                  <span className={styles.itemDot} style={{ background: accent }} />
+                  <span className={styles.itemText}>
+                    <span className={styles.itemName}>{p.nome}</span>
+                    <span className={styles.itemAddr}>{p.endereco}</span>
+                  </span>
+                </button>
+              ))
+            )}
+            {visible.length > 400 && (
+              <div className={styles.more}>+{(visible.length - 400).toLocaleString('pt-BR')} — refine a busca</div>
+            )}
+          </div>
+        </>
+      )}
     </aside>
   );
 }

@@ -4,8 +4,6 @@ import { DEV_AUTH_BYPASS } from './devAuth';
 
 export type Role = 'admin' | 'editor' | 'viewer';
 
-const ROLE_RANK: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 };
-
 export interface AuthCtx {
   userId: string;
   role:   Role;
@@ -55,6 +53,7 @@ export async function requireAuth(minRole: Role = 'viewer'): Promise<Ok | Err> {
     return errResponse(403, 'Acesso negado. Usuário sem permissão cadastrada.');
   }
 
+  const ROLE_RANK: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 };
   const userRank = ROLE_RANK[role as Role] ?? 0;
   if (userRank < ROLE_RANK[minRole]) {
     return errResponse(403, 'Permissão insuficiente.');
