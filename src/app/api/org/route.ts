@@ -3,7 +3,7 @@ import { insertNode } from '@/lib/orgRepository';
 import { requireAuth } from '@/lib/apiAuth';
 import { rateLimit, getIp, rateLimitResponse } from '@/lib/rateLimit';
 import { sanitizeNode } from '@/lib/sanitize';
-import { apiGet, handleApiError } from '@/lib/apiClient';
+import { apiGet, extractArray, handleApiError } from '@/lib/apiClient';
 import type { OrgNode } from '@/types/orgChart';
 
 export const dynamic = 'force-dynamic';
@@ -45,9 +45,26 @@ export async function GET(request: NextRequest) {
   if (err) return err;
 
   try {
-    const raw = await apiGet<{ total?: number; nodes?: VwNode[] }>('/vw_organograma_nodes');
-    const nodes = (raw.nodes ?? []).map(toOrgNode);
-    return NextResponse.json(nodes);
+    // Suporte a ?parent_id=<uuid> para busca lazy dos filhos de um setor
+    const parentId = request.nextUrl.searchParams.get('parent_id');
+    const params: Record<string, string> = {};
+    if (parentId) params.parent_id = parentId;
+
+    const raw   = await apiGet<unknown>('/vw_organograma_nodes', params);
+    const nodes = (extractArray(raw, 'nodes') as VwNode[]).map(toOrgNode);
+
+    // Oculta o setor "Diretoria" do organograma; seus filhos diretos viram raízes
+    const dirSetorIds = new Set(
+      nodes.filter(n => n.isSector && n.name.toLowerCase() === 'diretoria').map(n => n.id),
+    );
+    const visible = dirSetorIds.size === 0 ? nodes : nodes
+      .filter(n => !dirSetorIds.has(n.id))
+      .map(n => ({
+        ...n,
+        parentId: n.parentId && dirSetorIds.has(n.parentId) ? null : n.parentId,
+      }));
+
+    return NextResponse.json(visible);
   } catch (e) {
     const { msg, status } = handleApiError(e, 'Erro ao buscar dados do organograma.');
     return NextResponse.json({ error: msg }, { status });

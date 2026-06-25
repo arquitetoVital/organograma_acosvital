@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import type { Unidade } from '@/types/adminCore';
+import { IcoEdit, IcoTrash, IcoSearch, IcoEmpty } from '../../_icons';
 import styles from '../../crud.module.css';
 
 const BLANK = {
@@ -14,7 +15,6 @@ const BLANK = {
   logradouro: '', numero: '', complemento: '',
   bairro: '', cidade: '', estado: '', cep: '',
 };
-
 type UndForm = typeof BLANK;
 
 function maskCNPJ(v: string) {
@@ -34,16 +34,16 @@ function maskPhone(v: string) {
 }
 
 export default function UnidadesCadastroAdmin() {
-  const [unidades, setUnidades] = useState<Unidade[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState('');
-  const [filter,   setFilter]   = useState<'todos' | 'matriz' | 'filial'>('todos');
-  const [form,     setForm]     = useState<UndForm>(BLANK);
-  const [editing,  setEditing]  = useState<Unidade | null>(null);
-  const [saving,   setSaving]   = useState(false);
+  const [unidades,   setUnidades]   = useState<Unidade[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [search,     setSearch]     = useState('');
+  const [filter,     setFilter]     = useState<'todos' | 'matriz' | 'filial'>('todos');
+  const [form,       setForm]       = useState<UndForm>(BLANK);
+  const [editing,    setEditing]    = useState<Unidade | null>(null);
+  const [saving,     setSaving]     = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
-  const [toast,    setToast]    = useState<{ msg: string; err: boolean } | null>(null);
-  const [confirm,  setConfirm]  = useState<Unidade | null>(null);
+  const [toast,      setToast]      = useState<{ msg: string; err: boolean } | null>(null);
+  const [confirm,    setConfirm]    = useState<Unidade | null>(null);
 
   const showToast = useCallback((msg: string, err = false) => {
     setToast({ msg, err });
@@ -106,12 +106,12 @@ export default function UnidadesCadastroAdmin() {
       matriz_id:     u.matriz_id ?? '',
       nome_contato:  u.nome_contato,
       email:         u.email,
-      telefone:      u.telefone      ?? '',
-      celular:       u.celular       ?? '',
-      homepage:      u.homepage      ?? '',
+      telefone:      u.telefone    ?? '',
+      celular:       u.celular     ?? '',
+      homepage:      u.homepage    ?? '',
       logradouro:    u.logradouro,
       numero:        u.numero,
-      complemento:   u.complemento   ?? '',
+      complemento:   u.complemento ?? '',
       bairro:        u.bairro,
       cidade:        u.cidade,
       estado:        u.estado,
@@ -141,7 +141,7 @@ export default function UnidadesCadastroAdmin() {
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
-      showToast(editing ? 'Unidade atualizada!' : 'Unidade criada!');
+      showToast(editing ? 'Unidade atualizada.' : 'Unidade criada.');
       cancelEdit();
       await load();
     } finally { setSaving(false); }
@@ -157,6 +157,8 @@ export default function UnidadesCadastroAdmin() {
     await load();
   }
 
+  const accentColor = form.tipo_unidade === 'matriz' ? '#10b981' : '#3b82f6';
+
   return (
     <div className={styles.page}>
 
@@ -167,13 +169,25 @@ export default function UnidadesCadastroAdmin() {
           <span>Unidades</span>
         </div>
         <h1 className={styles.headerTitle}>Unidades</h1>
-        <span className={styles.headerBadge}>{unidades.length} cadastradas</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span className={styles.headerBadge}>{unidades.filter(u => u.tipo_unidade === 'matriz').length} matrizes</span>
+          <span className={styles.headerBadge} style={{ background: 'rgba(99,102,241,.10)', color: '#a5b4fc', borderColor: 'rgba(99,102,241,.20)' }}>
+            {unidades.filter(u => u.tipo_unidade === 'filial').length} filiais
+          </span>
+        </div>
       </div>
 
       <div className={styles.body}>
 
         {/* Formulário */}
         <div className={styles.formPanel}>
+          {/* Faixa de cor por tipo */}
+          <div style={{
+            height: 3, flexShrink: 0,
+            background: `linear-gradient(90deg, ${accentColor}, ${accentColor}44)`,
+            transition: 'background .25s ease',
+          }} />
+
           <div className={styles.formPanelHead}>
             <span className={styles.formPanelTitle}>{editing ? 'Editar unidade' : 'Nova unidade'}</span>
             {editing && <span className={`${styles.formPanelMode} ${styles.formPanelModeEdit}`}>Editando</span>}
@@ -181,46 +195,60 @@ export default function UnidadesCadastroAdmin() {
 
           <form className={styles.formBody} onSubmit={handleSubmit}>
 
-            {/* Empresa */}
-            <div className={styles.field}>
-              <label className={styles.label}>Tipo</label>
-              <select
-                className={styles.select}
-                value={form.tipo_unidade}
-                onChange={e => setForm(f => ({ ...f, tipo_unidade: e.target.value as 'matriz' | 'filial', matriz_id: '' }))}
-              >
-                <option value="matriz">Matriz</option>
-                <option value="filial">Filial</option>
-              </select>
+            <div className={styles.row2}>
+              <div className={styles.field}>
+                <label className={styles.label}>Tipo</label>
+                <select
+                  className={styles.select}
+                  value={form.tipo_unidade}
+                  onChange={e => setForm(f => ({ ...f, tipo_unidade: e.target.value as 'matriz' | 'filial', matriz_id: '' }))}
+                >
+                  <option value="matriz">Matriz</option>
+                  <option value="filial">Filial</option>
+                </select>
+              </div>
+
+              {form.tipo_unidade === 'filial' ? (
+                <div className={styles.field}>
+                  <label className={styles.label}>Matriz <span className={styles.required}>*</span></label>
+                  <select
+                    className={styles.select}
+                    value={form.matriz_id}
+                    onChange={e => setForm(f => ({ ...f, matriz_id: e.target.value }))}
+                  >
+                    <option value="">— Selecione —</option>
+                    {matrizes.map(m => (
+                      <option key={m.id} value={m.id}>{m.nome_fantasia}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className={styles.field}>
+                  <label className={styles.label}>CNPJ <span className={styles.required}>*</span></label>
+                  <input
+                    className={styles.input}
+                    value={form.cnpj}
+                    onChange={e => setForm(f => ({ ...f, cnpj: maskCNPJ(e.target.value) }))}
+                    placeholder="00.000.000/0000-00"
+                    disabled={!!editing}
+                  />
+                </div>
+              )}
             </div>
 
             {form.tipo_unidade === 'filial' && (
               <div className={styles.field}>
-                <label className={styles.label}>Matriz <span className={styles.required}>*</span></label>
-                <select
-                  className={styles.select}
-                  value={form.matriz_id}
-                  onChange={e => setForm(f => ({ ...f, matriz_id: e.target.value }))}
-                >
-                  <option value="">— Selecione a matriz —</option>
-                  {matrizes.map(m => (
-                    <option key={m.id} value={m.id}>{m.nome_fantasia}</option>
-                  ))}
-                </select>
+                <label className={styles.label}>CNPJ <span className={styles.required}>*</span></label>
+                <input
+                  className={styles.input}
+                  value={form.cnpj}
+                  onChange={e => setForm(f => ({ ...f, cnpj: maskCNPJ(e.target.value) }))}
+                  placeholder="00.000.000/0000-00"
+                  disabled={!!editing}
+                />
+                {editing && <span className={styles.fieldHint}>CNPJ não pode ser alterado após criação.</span>}
               </div>
             )}
-
-            <div className={styles.field}>
-              <label className={styles.label}>CNPJ <span className={styles.required}>*</span></label>
-              <input
-                className={styles.input}
-                value={form.cnpj}
-                onChange={e => setForm(f => ({ ...f, cnpj: maskCNPJ(e.target.value) }))}
-                placeholder="00.000.000/0000-00"
-                disabled={!!editing}
-              />
-              {editing && <span className={styles.fieldHint}>CNPJ não pode ser alterado após criação.</span>}
-            </div>
 
             <div className={styles.field}>
               <label className={styles.label}>Razão Social <span className={styles.required}>*</span></label>
@@ -242,7 +270,6 @@ export default function UnidadesCadastroAdmin() {
               />
             </div>
 
-            {/* Contato */}
             <div className={styles.field}>
               <label className={styles.label}>Nome do Contato <span className={styles.required}>*</span></label>
               <input
@@ -297,14 +324,14 @@ export default function UnidadesCadastroAdmin() {
                 />
               </div>
               <div className={styles.field}>
-                <label className={styles.label} style={{ opacity: 0 }}>Buscar</label>
+                <label className={styles.label} style={{ opacity: 0, userSelect: 'none' }}>.</label>
                 <button
                   type="button"
                   className={styles.btnSecondary}
                   onClick={buscarCEP}
                   disabled={cepLoading}
                 >
-                  {cepLoading ? '…' : 'Buscar CEP'}
+                  {cepLoading ? 'Buscando…' : 'Buscar CEP'}
                 </button>
               </div>
             </div>
@@ -343,7 +370,9 @@ export default function UnidadesCadastroAdmin() {
           </form>
 
           <div className={styles.formFoot}>
-            {editing && <button type="button" className={styles.btnSecondary} onClick={cancelEdit}>Cancelar</button>}
+            {editing && (
+              <button type="button" className={styles.btnSecondary} onClick={cancelEdit}>Cancelar</button>
+            )}
             <button
               className={styles.btnPrimary}
               disabled={saving}
@@ -362,7 +391,7 @@ export default function UnidadesCadastroAdmin() {
               <span className={styles.statsLabel}>unidades</span>
             </div>
             <div className={styles.searchWrap}>
-              <span className={styles.searchIcon}>⌕</span>
+              <span className={styles.searchIcon}><IcoSearch /></span>
               <input
                 className={styles.searchInput}
                 placeholder="Buscar unidade…"
@@ -394,9 +423,9 @@ export default function UnidadesCadastroAdmin() {
               ))
             ) : filtered.length === 0 ? (
               <div className={styles.empty}>
-                <div className={styles.emptyIcon}>🏢</div>
+                <div className={styles.emptyIcon}><IcoEmpty /></div>
                 <p className={styles.emptyTitle}>Nenhuma unidade encontrada</p>
-                <p className={styles.emptyText}>Cadastre a primeira unidade usando o formulário.</p>
+                <p className={styles.emptyText}>Cadastre a primeira unidade usando o formulário ao lado.</p>
               </div>
             ) : (
               filtered.map(u => (
@@ -414,8 +443,8 @@ export default function UnidadesCadastroAdmin() {
                     {u.tipo_unidade === 'matriz' ? 'Matriz' : 'Filial'}
                   </span>
                   <div className={styles.rowActions} onClick={e => e.stopPropagation()}>
-                    <button className={styles.iconBtn} title="Editar" onClick={() => startEdit(u)}>✏</button>
-                    <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} title="Excluir" onClick={() => setConfirm(u)}>🗑</button>
+                    <button className={styles.iconBtn} aria-label={`Editar ${u.nome_fantasia}`} onClick={() => startEdit(u)}><IcoEdit /></button>
+                    <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} aria-label={`Excluir ${u.nome_fantasia}`} onClick={() => setConfirm(u)}><IcoTrash /></button>
                   </div>
                 </div>
               ))
@@ -424,14 +453,34 @@ export default function UnidadesCadastroAdmin() {
         </div>
       </div>
 
-      {toast && <div className={`${styles.toast} ${toast.err ? styles.toastErr : ''}`}>{toast.msg}</div>}
+      {toast && (
+        <div
+          role={toast.err ? 'alert' : 'status'}
+          aria-live={toast.err ? 'assertive' : 'polite'}
+          aria-atomic="true"
+          className={`${styles.toast} ${toast.err ? styles.toastErr : ''}`}
+        >
+          {toast.msg}
+        </div>
+      )}
 
       {confirm && (
         <div className={styles.overlay} onClick={() => setConfirm(null)}>
-          <div className={styles.confirmModal} onClick={e => e.stopPropagation()}>
-            <div className={styles.confirmIcon}>🗑</div>
-            <p className={styles.confirmTitle}>Excluir unidade</p>
-            <p className={styles.confirmMsg}>Remover <strong>{confirm.nome_fantasia}</strong>?</p>
+          <div
+            className={styles.confirmModal}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-unidade-title"
+          >
+            <div className={styles.confirmIcon} style={{ color: 'var(--danger)', display: 'flex', justifyContent: 'center' }} aria-hidden="true">
+              <IcoTrash size={32} />
+            </div>
+            <p className={styles.confirmTitle} id="confirm-unidade-title">Excluir unidade</p>
+            <p className={styles.confirmMsg}>
+              Remover <strong>{confirm.nome_fantasia}</strong>?<br />
+              Esta ação não pode ser desfeita.
+            </p>
             <div className={styles.confirmFoot}>
               <button className={styles.btnSecondary} onClick={() => setConfirm(null)}>Cancelar</button>
               <button className={styles.btnDanger} onClick={() => handleDelete(confirm)}>Excluir</button>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/apiAuth';
 import { apiGet, apiPost, apiDelete, handleApiError, fetchAllPages } from '@/lib/apiClient';
+import { recomputeSectorHierarchy } from '@/lib/sectorHierarchy';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,14 +76,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cargo não encontrado.' }, { status: 422 });
   }
 
-  const skipOrgNode  = b.skip_org_node === true;
-  const parentNodeId: string | null = b.parent_node_id ? String(b.parent_node_id) : null;
-  if (!skipOrgNode && cargoNvl >= 4 && !parentNodeId) {
-    return NextResponse.json(
-      { error: 'Informe a quem este funcionário reporta ("Reporta a").' },
-      { status: 422 },
-    );
-  }
+  const skipOrgNode = b.skip_org_node === true;
 
   // Cria o funcionário
   let funcData: { id: string };
@@ -123,9 +117,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...funcData }, { status: 201 });
   }
 
-  // Determina o parent_id do nó no organograma
-  // nvl 0 (diretor-raiz): parent_id nulo; nvl 1 (GM): view resolve; demais: parentNodeId obrigatório
-  const orgParentId = (cargoNvl === 0 || cargoNvl === 1) ? null : parentNodeId;
+  // Determina o parent_id do nó no organograma via hierarquia automática do setor.
+  // Níveis 0-1 (Diretor/GM) são sempre raízes; demais são calculados pelo setor.
+  let orgParentId: string | null = null;
+  if (cargoNvl <= 1) {
+    orgParentId = null;
+  } else {
+    try {
+      const parentMap = await recomputeSectorHierarchy(String(b.id_setor), {
+        includeNew: { id: funcData.id, nvl: cargoNvl },
+      });
+      orgParentId = parentMap.get(funcData.id) ?? String(b.id_setor);
+    } catch {
+      orgParentId = String(b.id_setor);
+    }
+  }
 
   // Cria o nó no organograma via API externa
   // O nó usa o mesmo UUID do funcionário como id, facilitando lookups futuros

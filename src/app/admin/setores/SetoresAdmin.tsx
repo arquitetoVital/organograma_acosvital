@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import type { Setor } from '@/types/adminCore';
+import { IcoEdit, IcoTrash, IcoSearch, IcoEmpty } from '../_icons';
 import styles from '../crud.module.css';
 
 const PALETTE = [
@@ -16,7 +17,6 @@ const BLANK = {
   nome: '', codigo_setor: '', sigla: '', descricao: '',
   cor_setor: '#3b82f6', parent_id: '', ativo: true,
 };
-
 type SetorForm = typeof BLANK;
 
 function buildTree(setores: Setor[]): Setor[] {
@@ -52,7 +52,6 @@ export default function SetoresAdmin() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Setores disponíveis como pai (apenas nível 1 — ou sem pai)
   const parentOptions = useMemo(
     () => setores.filter(s => !s.parent_id && s.ativo && (!editing || s.id !== editing.id)),
     [setores, editing],
@@ -86,10 +85,7 @@ export default function SetoresAdmin() {
     });
   }
 
-  function cancelEdit() {
-    setEditing(null);
-    setForm(BLANK);
-  }
+  function cancelEdit() { setEditing(null); setForm(BLANK); }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -106,19 +102,17 @@ export default function SetoresAdmin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          parent_id:    form.parent_id || null,
+          parent_id:    form.parent_id    || null,
           codigo_setor: form.codigo_setor || null,
-          sigla:        form.sigla || null,
+          sigla:        form.sigla        || null,
         }),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
-      showToast(editing ? 'Setor atualizado!' : 'Setor criado!');
+      showToast(editing ? 'Setor atualizado.' : 'Setor criado.');
       cancelEdit();
       await load();
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   async function handleDelete(s: Setor) {
@@ -148,6 +142,13 @@ export default function SetoresAdmin() {
 
         {/* Formulário */}
         <div className={styles.formPanel}>
+          {/* Faixa de cor do setor */}
+          <div style={{
+            height: 3, flexShrink: 0,
+            background: `linear-gradient(90deg, ${form.cor_setor}, ${form.cor_setor}44)`,
+            transition: 'background .25s ease',
+          }} />
+
           <div className={styles.formPanelHead}>
             <span className={styles.formPanelTitle}>{editing ? 'Editar setor' : 'Novo setor'}</span>
             {editing && <span className={`${styles.formPanelMode} ${styles.formPanelModeEdit}`}>Editando</span>}
@@ -189,7 +190,7 @@ export default function SetoresAdmin() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Setor pai (sub-setor)</label>
+              <label className={styles.label}>Setor pai</label>
               <select
                 className={styles.select}
                 value={form.parent_id}
@@ -200,7 +201,7 @@ export default function SetoresAdmin() {
                   <option key={p.id} value={p.id}>{p.nome}{p.sigla ? ` (${p.sigla})` : ''}</option>
                 ))}
               </select>
-              <span className={styles.fieldHint}>Deixe vazio para setor de nível 1. Selecione um pai para criar sub-setor.</span>
+              <span className={styles.fieldHint}>Deixe vazio para setor de nível 1.</span>
             </div>
 
             <div className={styles.field}>
@@ -233,11 +234,13 @@ export default function SetoresAdmin() {
             <div
               className={styles.toggleRow}
               onClick={() => setForm(f => ({ ...f, ativo: !f.ativo }))}
-              role="button" tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && setForm(f => ({ ...f, ativo: !f.ativo }))}
+              role="switch"
+              aria-checked={form.ativo}
+              tabIndex={0}
+              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setForm(f => ({ ...f, ativo: !f.ativo }))}
             >
               <span className={styles.toggleLabel}>Setor ativo</span>
-              <span className={`${styles.toggle} ${form.ativo ? styles.toggleOn : ''}`} />
+              <span className={`${styles.toggle} ${form.ativo ? styles.toggleOn : ''}`} aria-hidden="true" />
             </div>
           </form>
 
@@ -263,7 +266,7 @@ export default function SetoresAdmin() {
               <span className={styles.statsLabel}>setores</span>
             </div>
             <div className={styles.searchWrap}>
-              <span className={styles.searchIcon}>⌕</span>
+              <span className={styles.searchIcon}><IcoSearch /></span>
               <input
                 className={styles.searchInput}
                 placeholder="Buscar setor…"
@@ -295,45 +298,48 @@ export default function SetoresAdmin() {
               ))
             ) : filtered.length === 0 ? (
               <div className={styles.empty}>
-                <div className={styles.emptyIcon}>🏗</div>
+                <div className={styles.emptyIcon}><IcoEmpty /></div>
                 <p className={styles.emptyTitle}>Nenhum setor encontrado</p>
                 <p className={styles.emptyText}>Crie o primeiro setor usando o formulário ao lado.</p>
               </div>
             ) : (
               filtered.map(s => {
                 const isChild = !!s.parent_id;
+                const cor = s.cor_setor ?? '#64748b';
                 return (
                   <div
                     key={s.id}
                     className={`${styles.row} ${editing?.id === s.id ? styles.rowSelected : ''} ${!s.ativo ? styles.rowInactive : ''}`}
-                    style={{ paddingLeft: isChild ? 28 : 12, borderLeft: isChild ? `2px solid ${s.cor_setor ?? '#334155'}40` : 'none' }}
+                    style={{ paddingLeft: isChild ? 28 : 12, borderLeft: isChild ? `2px solid ${cor}40` : 'none' }}
                     onClick={() => startEdit(s)}
                   >
                     <div
                       className={styles.rowColorDot}
-                      style={{ background: s.cor_setor ?? '#64748b', width: isChild ? 8 : 10, height: isChild ? 8 : 10 }}
+                      style={{ background: cor, width: isChild ? 8 : 10, height: isChild ? 8 : 10 }}
                     />
                     <div className={styles.rowBody}>
                       <div className={styles.rowName}>
-                        {isChild && <span style={{ opacity: .5, marginRight: 4 }}>↳</span>}
+                        {isChild && <span style={{ opacity: .4, marginRight: 4, fontSize: 11 }}>↳</span>}
                         {s.nome}
-                        {s.sigla && <span style={{ color: 'var(--text-faint)', marginLeft: 6, fontSize: 11 }}>({s.sigla})</span>}
+                        {s.sigla && (
+                          <span style={{ color: 'var(--text-faint)', marginLeft: 6, fontSize: 11 }}>({s.sigla})</span>
+                        )}
                       </div>
                       {s.codigo_setor && <div className={styles.rowSub}>Cód: {s.codigo_setor}</div>}
                     </div>
-                    <span style={{ fontSize: 10, color: 'var(--text-faint)', flexShrink: 0 }}>
-                      {s.parent_id ? 'Sub-setor' : 'Setor'}
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, flexShrink: 0,
+                      color: isChild ? 'var(--text-faint)' : 'var(--text-muted)',
+                      letterSpacing: '.04em',
+                    }}>
+                      {isChild ? 'Sub-setor' : 'Setor'}
                     </span>
                     <span className={s.ativo ? styles.badgeAtivo : styles.badgeInativo}>
                       {s.ativo ? 'Ativo' : 'Inativo'}
                     </span>
                     <div className={styles.rowActions} onClick={e => e.stopPropagation()}>
-                      <button className={styles.iconBtn} title="Editar" onClick={() => startEdit(s)}>✏</button>
-                      <button
-                        className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                        title="Excluir"
-                        onClick={() => setConfirm(s)}
-                      >🗑</button>
+                      <button className={styles.iconBtn} aria-label={`Editar ${s.nome}`} onClick={() => startEdit(s)}><IcoEdit /></button>
+                      <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} aria-label={`Excluir ${s.nome}`} onClick={() => setConfirm(s)}><IcoTrash /></button>
                     </div>
                   </div>
                 );
@@ -343,16 +349,33 @@ export default function SetoresAdmin() {
         </div>
       </div>
 
-      {toast && <div className={`${styles.toast} ${toast.err ? styles.toastErr : ''}`}>{toast.msg}</div>}
+      {toast && (
+        <div
+          role={toast.err ? 'alert' : 'status'}
+          aria-live={toast.err ? 'assertive' : 'polite'}
+          aria-atomic="true"
+          className={`${styles.toast} ${toast.err ? styles.toastErr : ''}`}
+        >
+          {toast.msg}
+        </div>
+      )}
 
       {confirm && (
         <div className={styles.overlay} onClick={() => setConfirm(null)}>
-          <div className={styles.confirmModal} onClick={e => e.stopPropagation()}>
-            <div className={styles.confirmIcon}>🗑</div>
-            <p className={styles.confirmTitle}>Excluir setor</p>
+          <div
+            className={styles.confirmModal}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-setor-title"
+          >
+            <div className={styles.confirmIcon} style={{ color: 'var(--danger)', display: 'flex', justifyContent: 'center' }} aria-hidden="true">
+              <IcoTrash size={32} />
+            </div>
+            <p className={styles.confirmTitle} id="confirm-setor-title">Excluir setor</p>
             <p className={styles.confirmMsg}>
               Remover <strong>{confirm.nome}</strong>?<br />
-              Sub-setores e funcionários vinculados precisarão ser reatribuídos antes.
+              Sub-setores e funcionários vinculados precisarão ser reatribuídos.
             </p>
             <div className={styles.confirmFoot}>
               <button className={styles.btnSecondary} onClick={() => setConfirm(null)}>Cancelar</button>

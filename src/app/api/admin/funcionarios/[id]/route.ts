@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/apiAuth';
-import { ApiError, apiPost, apiPut, apiDelete, handleApiError } from '@/lib/apiClient';
+import { ApiError, apiGet, apiPost, apiPut, apiDelete, handleApiError } from '@/lib/apiClient';
+import { recomputeSectorHierarchy } from '@/lib/sectorHierarchy';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,33 +41,34 @@ export async function PUT(
       : null;
   }
 
+  const cargoChanged  = b.id_cargo !== undefined;
+  const sectorChanged = b.id_setor !== undefined && b.id_setor !== '';
+
+  // Busca o setor atual antes de atualizar (necessário para recomputar o setor antigo)
+  let oldSectorId: string | null = null;
+  if (sectorChanged || cargoChanged) {
+    try {
+      const raw = await apiGet<unknown>(`/funcionarios/${id}`);
+      const obj = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+      const func = (obj.funcionario as Record<string, unknown> | undefined) ?? obj;
+      oldSectorId = typeof func.id_setor === 'string' ? func.id_setor : null;
+    } catch { /* best-effort */ }
+  }
+
   try {
     const data = await apiPut(`/funcionarios/${id}`, patch);
 
-    // Sincroniza o nó no organograma
-    // Prioridade: parent_node_id explícito > novo setor > sem mudança
-    const hasExplicitParent = b.parent_node_id !== undefined;
-    const sectorChanged     = b.id_setor !== undefined && b.id_setor !== '';
+    // Recomputa hierarquia automática do(s) setor(es) afetado(s)
+    if (sectorChanged || cargoChanged) {
+      const newSectorId = sectorChanged ? String(b.id_setor) : (oldSectorId ?? null);
 
-    if (hasExplicitParent || sectorChanged) {
-      const newParentId: string | null = hasExplicitParent
-        ? (b.parent_node_id ? String(b.parent_node_id) : null)
-        : String(b.id_setor); // UUID do setor == UUID do nó do setor
+      if (newSectorId) {
+        recomputeSectorHierarchy(newSectorId).catch(() => {/* best-effort */});
+      }
 
-      try {
-        await apiPut(`/organograma_nodes/${id}`, { parent_id: newParentId });
-      } catch (e) {
-        // Se o nó não existe (foi removido junto com o setor excluído) → recriar
-        if (e instanceof ApiError && e.status === 404 && sectorChanged) {
-          try {
-            await apiPost('/organograma_nodes', {
-              id:        id,
-              id_ent:    id,
-              parent_id: String(b.id_setor),
-              is_sector: false,
-            });
-          } catch { /* best-effort */ }
-        }
+      // Se o setor mudou, recomputa o setor antigo (alguém podia reportar a este funcionário)
+      if (sectorChanged && oldSectorId && oldSectorId !== newSectorId) {
+        recomputeSectorHierarchy(oldSectorId, { excludeId: id }).catch(() => {/* best-effort */});
       }
     }
 
@@ -87,6 +89,15 @@ export async function DELETE(
   const { err } = await requireAuth('editor');
   if (err) return err;
 
+  // Obtém o setor antes de deletar para recomputar a hierarquia depois
+  let sectorId: string | null = null;
+  try {
+    const raw = await apiGet<unknown>(`/funcionarios/${id}`);
+    const obj  = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+    const func = (obj.funcionario as Record<string, unknown> | undefined) ?? obj;
+    sectorId = typeof func.id_setor === 'string' ? func.id_setor : null;
+  } catch { /* best-effort */ }
+
   try {
     await apiDelete(`/funcionarios/${id}`);
   } catch (e) {
@@ -97,6 +108,11 @@ export async function DELETE(
 
   // Remove o nó correspondente no organograma (best-effort)
   try { await apiDelete(`/organograma_nodes/${id}`); } catch { /* ignora se já não existir */ }
+
+  // Recomputa hierarquia do setor após remoção do funcionário
+  if (sectorId) {
+    recomputeSectorHierarchy(sectorId, { excludeId: id }).catch(() => {/* best-effort */});
+  }
 
   return NextResponse.json({ ok: true });
 }

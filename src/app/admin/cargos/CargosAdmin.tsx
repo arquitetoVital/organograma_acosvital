@@ -5,9 +5,9 @@ import Link from 'next/link';
 import type { Cargo } from '@/types/adminCore';
 import { CARGO_LEVELS, NVL_LABELS } from '@/types/adminCore';
 import { levelColors } from '@/data/orgData';
+import { IcoEdit, IcoTrash, IcoSearch, IcoEmpty } from '../_icons';
 import styles from '../crud.module.css';
 
-// ── Paleta de cor por nível ───────────────────────────────────────────────────
 function LvlBadge({ nvl }: { nvl: number }) {
   const color = levelColors[nvl] ?? '#94a3b8';
   return (
@@ -23,15 +23,15 @@ function LvlBadge({ nvl }: { nvl: number }) {
 const BLANK = { nome: '', nvl_permissao: 4, descricao: '', ativo: true };
 
 export default function CargosAdmin() {
-  const [cargos,   setCargos]   = useState<Cargo[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState('');
-  const [filter,   setFilter]   = useState<'todos' | 'ativos' | 'inativos'>('ativos');
-  const [form,     setForm]     = useState(BLANK);
-  const [editing,  setEditing]  = useState<Cargo | null>(null);
-  const [saving,   setSaving]   = useState(false);
-  const [toast,    setToast]    = useState<{ msg: string; err: boolean } | null>(null);
-  const [confirm,  setConfirm]  = useState<Cargo | null>(null);
+  const [cargos,  setCargos]  = useState<Cargo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
+  const [filter,  setFilter]  = useState<'todos' | 'ativos' | 'inativos'>('ativos');
+  const [form,    setForm]    = useState(BLANK);
+  const [editing, setEditing] = useState<Cargo | null>(null);
+  const [saving,  setSaving]  = useState(false);
+  const [toast,   setToast]   = useState<{ msg: string; err: boolean } | null>(null);
+  const [confirm, setConfirm] = useState<Cargo | null>(null);
 
   const showToast = useCallback((msg: string, err = false) => {
     setToast({ msg, err });
@@ -67,10 +67,7 @@ export default function CargosAdmin() {
     setForm({ nome: c.nome, nvl_permissao: c.nvl_permissao, descricao: c.descricao, ativo: c.ativo });
   }
 
-  function cancelEdit() {
-    setEditing(null);
-    setForm(BLANK);
-  }
+  function cancelEdit() { setEditing(null); setForm(BLANK); }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -89,12 +86,10 @@ export default function CargosAdmin() {
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
-      showToast(editing ? 'Cargo atualizado!' : 'Cargo criado!');
+      showToast(editing ? 'Cargo atualizado.' : 'Cargo criado.');
       cancelEdit();
       await load();
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   async function handleDelete(c: Cargo) {
@@ -107,10 +102,11 @@ export default function CargosAdmin() {
     await load();
   }
 
+  const selectedColor = levelColors[form.nvl_permissao] ?? '#94a3b8';
+
   return (
     <div className={styles.page}>
 
-      {/* Header */}
       <div className={styles.header}>
         <div className={styles.breadcrumb}>
           <Link href="/admin">Admin</Link>
@@ -123,8 +119,15 @@ export default function CargosAdmin() {
 
       <div className={styles.body}>
 
-        {/* Painel esquerdo: formulário */}
+        {/* Formulário */}
         <div className={styles.formPanel}>
+          {/* Faixa de nível colorida */}
+          <div style={{
+            height: 3, flexShrink: 0,
+            background: `linear-gradient(90deg, ${selectedColor}, ${selectedColor}44)`,
+            transition: 'background .3s ease',
+          }} />
+
           <div className={styles.formPanelHead}>
             <span className={styles.formPanelTitle}>{editing ? 'Editar cargo' : 'Novo cargo'}</span>
             {editing && <span className={`${styles.formPanelMode} ${styles.formPanelModeEdit}`}>Editando</span>}
@@ -150,12 +153,21 @@ export default function CargosAdmin() {
                 onChange={e => setForm(f => ({ ...f, nvl_permissao: Number(e.target.value) }))}
               >
                 {CARGO_LEVELS.map(lvl => (
-                  <option key={lvl} value={lvl}>
-                    {lvl} — {NVL_LABELS[lvl]}
-                  </option>
+                  <option key={lvl} value={lvl}>{lvl} — {NVL_LABELS[lvl]}</option>
                 ))}
               </select>
-              <span className={styles.fieldHint}>Faixa válida: 0–12. Níveis 2 e 3 são reservados para Setores e Sub-setores.</span>
+              <span className={styles.fieldHint}>Faixa válida: 0–12. Níveis 2 e 3 são reservados para setores.</span>
+            </div>
+
+            {/* Preview de nível */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 10px', borderRadius: 6,
+              background: `${selectedColor}0d`, border: `1px solid ${selectedColor}22`,
+              fontSize: 11.5, color: 'var(--text-muted)',
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: selectedColor, flexShrink: 0 }} />
+              {NVL_LABELS[form.nvl_permissao] ?? `Nível ${form.nvl_permissao}`}
             </div>
 
             <div className={styles.field}>
@@ -172,25 +184,19 @@ export default function CargosAdmin() {
             <div
               className={styles.toggleRow}
               onClick={() => setForm(f => ({ ...f, ativo: !f.ativo }))}
-              role="button"
+              role="switch"
+              aria-checked={form.ativo}
               tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && setForm(f => ({ ...f, ativo: !f.ativo }))}
+              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setForm(f => ({ ...f, ativo: !f.ativo }))}
             >
               <span className={styles.toggleLabel}>Cargo ativo</span>
-              <span className={`${styles.toggle} ${form.ativo ? styles.toggleOn : ''}`} />
-            </div>
-
-            {/* Preview do nível */}
-            <div style={{ paddingTop: 4 }}>
-              <LvlBadge nvl={form.nvl_permissao} />
+              <span className={`${styles.toggle} ${form.ativo ? styles.toggleOn : ''}`} aria-hidden="true" />
             </div>
           </form>
 
           <div className={styles.formFoot}>
             {editing && (
-              <button type="button" className={styles.btnSecondary} onClick={cancelEdit}>
-                Cancelar
-              </button>
+              <button type="button" className={styles.btnSecondary} onClick={cancelEdit}>Cancelar</button>
             )}
             <button
               type="submit"
@@ -203,7 +209,7 @@ export default function CargosAdmin() {
           </div>
         </div>
 
-        {/* Painel direito: lista */}
+        {/* Lista */}
         <div className={styles.listPanel}>
           <div className={styles.listHeader}>
             <div className={styles.statsChip}>
@@ -212,7 +218,7 @@ export default function CargosAdmin() {
             </div>
 
             <div className={styles.searchWrap}>
-              <span className={styles.searchIcon}>⌕</span>
+              <span className={styles.searchIcon}><IcoSearch /></span>
               <input
                 className={styles.searchInput}
                 placeholder="Buscar cargo…"
@@ -245,7 +251,7 @@ export default function CargosAdmin() {
               ))
             ) : filtered.length === 0 ? (
               <div className={styles.empty}>
-                <div className={styles.emptyIcon}>🗂</div>
+                <div className={styles.emptyIcon}><IcoEmpty /></div>
                 <p className={styles.emptyTitle}>Nenhum cargo encontrado</p>
                 <p className={styles.emptyText}>Crie o primeiro cargo usando o formulário ao lado.</p>
               </div>
@@ -269,12 +275,8 @@ export default function CargosAdmin() {
                     {c.ativo ? 'Ativo' : 'Inativo'}
                   </span>
                   <div className={styles.rowActions} onClick={e => e.stopPropagation()}>
-                    <button className={styles.iconBtn} title="Editar" onClick={() => startEdit(c)}>✏</button>
-                    <button
-                      className={`${styles.iconBtn} ${styles.iconBtnDanger}`}
-                      title="Excluir"
-                      onClick={() => setConfirm(c)}
-                    >🗑</button>
+                    <button className={styles.iconBtn} aria-label={`Editar ${c.nome}`} onClick={() => startEdit(c)}><IcoEdit /></button>
+                    <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} aria-label={`Excluir ${c.nome}`} onClick={() => setConfirm(c)}><IcoTrash /></button>
                   </div>
                 </div>
               ))
@@ -283,17 +285,30 @@ export default function CargosAdmin() {
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
-        <div className={`${styles.toast} ${toast.err ? styles.toastErr : ''}`}>{toast.msg}</div>
+        <div
+          role={toast.err ? 'alert' : 'status'}
+          aria-live={toast.err ? 'assertive' : 'polite'}
+          aria-atomic="true"
+          className={`${styles.toast} ${toast.err ? styles.toastErr : ''}`}
+        >
+          {toast.msg}
+        </div>
       )}
 
-      {/* Confirm delete */}
       {confirm && (
         <div className={styles.overlay} onClick={() => setConfirm(null)}>
-          <div className={styles.confirmModal} onClick={e => e.stopPropagation()}>
-            <div className={styles.confirmIcon}>🗑</div>
-            <p className={styles.confirmTitle}>Excluir cargo</p>
+          <div
+            className={styles.confirmModal}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-cargo-title"
+          >
+            <div className={styles.confirmIcon} style={{ color: 'var(--danger)', display: 'flex', justifyContent: 'center' }} aria-hidden="true">
+              <IcoTrash size={32} />
+            </div>
+            <p className={styles.confirmTitle} id="confirm-cargo-title">Excluir cargo</p>
             <p className={styles.confirmMsg}>
               Tem certeza que deseja remover <strong>{confirm.nome}</strong>?<br />
               Funcionários com este cargo precisarão ser atualizados.

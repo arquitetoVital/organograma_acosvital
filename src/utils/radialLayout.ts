@@ -57,14 +57,29 @@ export function getSubtree(rootId: string, allNodes: OrgNode[]): OrgNode[] {
 
   const idMap = new Map(allNodes.map((n) => [n.id, n]));
   const result: OrgNode[] = [];
+  const visited = new Set<string>();
   const queue: string[] = [rootId];
+
   while (queue.length) {
     const id = queue.shift()!;
-    const node = idMap.get(id);
-    if (!node) continue;
-    result.push(node);
+    if (visited.has(id)) continue;
+    visited.add(id);
+
+    // Tenta exato; se não achar, tenta variante com/sem prefixo 'sec-' (Supabase vs. API)
+    let node = idMap.get(id);
+    const altId = id.startsWith('sec-') ? id.slice(4) : `sec-${id}`;
+    if (!node) node = idMap.get(altId);
+
+    if (node) {
+      // Garante que o nó raiz sempre usa o canonicalId passado (importante para detailCenter)
+      result.push(node.id === id ? node : { ...node, id });
+    }
+
+    // Percorre filhos sob ambas as variantes de ID (Supabase + API externa podem divergir)
     childrenOf.get(id)?.forEach((c) => queue.push(c.id));
+    if (!visited.has(altId)) childrenOf.get(altId)?.forEach((c) => queue.push(c.id));
   }
+
   return result;
 }
 
