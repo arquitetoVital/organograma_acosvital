@@ -38,11 +38,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let isAdmin = DEV_AUTH_BYPASS;
+  let userEmail: string | undefined;
   if (!DEV_AUTH_BYPASS) {
     try {
       const supabase = await createClient();
-      const { data } = await supabase.rpc('get_my_role');
-      isAdmin = data === 'admin';
+      const [{ data: roleData }, { data: { user } }] = await Promise.all([
+        supabase.rpc('get_my_role'),
+        supabase.auth.getUser(),
+      ]);
+      isAdmin = roleData === 'admin';
+      userEmail = user?.email;
     } catch {}
   }
 
@@ -63,7 +68,7 @@ export default async function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
-        <SidebarShell isAdmin={isAdmin}>
+        <SidebarShell isAdmin={isAdmin} userEmail={userEmail}>
           {children}
         </SidebarShell>
       </body>

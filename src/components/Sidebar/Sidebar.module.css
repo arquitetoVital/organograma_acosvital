@@ -1,6 +1,6 @@
 /* ── Sidebar wrapper ─────────────────────────────────────────────────── */
 .sidebar {
-  width: 220px;
+  width: 240px;
   height: 100%;
   flex-shrink: 0;
   display: flex;
@@ -9,48 +9,165 @@
   border-right: 1px solid var(--border-subtle);
   overflow: hidden;
   position: relative;
-  transition: background-color var(--dur-normal) var(--ease-in-out);
+  transition: width 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed {
+  width: 68px;
+}
+
+/* ── Modo flutuante (tela cheia) ─────────────────────────────────────── */
+.floating {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  bottom: 12px;
+  height: auto;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 8px 40px rgba(0, 0, 0, 0.70),
+    0 2px 12px rgba(0, 0, 0, 0.45);
+  background: rgba(6, 9, 22, 0.88);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  z-index: 200;
+  overflow: hidden;
+
+  /* Força paleta escura no modo flutuante independente do tema do sistema */
+  --bg-sidebar:       rgba(6, 9, 22, 0.88);
+  --text-primary:     #f1f5f9;
+  --text-secondary:   rgba(255, 255, 255, 0.62);
+  --text-muted:       rgba(255, 255, 255, 0.45);
+  --text-faint:       rgba(255, 255, 255, 0.30);
+  --border-subtle:    rgba(255, 255, 255, 0.07);
+  --border-light:     rgba(255, 255, 255, 0.13);
+  --hover-bg:         rgba(255, 255, 255, 0.05);
+  --hover-bg-strong:  rgba(255, 255, 255, 0.09);
+  --accent-text:      #93c5fd;
+  --accent-bg:        rgba(59, 130, 246, 0.12);
 }
 
 /* ── Brand / Logo ───────────────────────────────────────────────────── */
 .brand {
-  padding: 20px 18px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 14px 14px 18px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  min-height: 68px;
 }
 
 .logo {
-  width: 130px;
-  height: 38px;
+  width: 120px;
+  height: 34px;
   object-fit: contain;
   display: block;
   user-select: none;
   pointer-events: none;
-}
-
-/* No tema claro o logotipo (branco) ganha um chip escuro para manter contraste */
-:global([data-theme='light']) .logo {
-  box-sizing: content-box;
-  padding: 7px 12px;
-  background: #0b1322;
-  border-radius: var(--radius-md);
-}
-
-/* ── Nav section ────────────────────────────────────────────────────── */
-.nav {
-  padding: 14px 10px 6px;
   flex-shrink: 0;
+  opacity: 1;
+  transition: opacity 180ms, width 280ms;
+  box-sizing: content-box;
+  padding: 6px 10px;
+  background: #0b1322;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.navSection {
+.collapsed .logo {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Logo ícone — só aparece quando colapsado ou flutuante */
+.logoIcon {
+  width: 0;
+  height: 34px;
+  object-fit: contain;
   display: block;
-  font-size: 9px;
+  opacity: 0;
+  flex-shrink: 0;
+  user-select: none;
+  pointer-events: none;
+  transition: opacity 200ms, width 280ms;
+  box-sizing: content-box;
+  padding: 5px;
+  background: #0b1322;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.collapsed .logoIcon {
+  width: 34px;
+  opacity: 1;
+}
+
+/* Botão de colapso */
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--ease-fast), color var(--ease-fast), border-color var(--ease-fast);
+}
+.collapseBtn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+.collapseBtn:active { transform: scale(0.92); }
+
+/* No estado colapsado: empilha logo ícone (cima) + botão de colapso (baixo) */
+.collapsed .brand {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 16px 0 12px;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* ── Rótulos de seção ───────────────────────────────────────────────── */
+.sectionLabel {
+  display: block;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 1.8px;
+  letter-spacing: 1.6px;
   text-transform: uppercase;
   color: var(--text-faint);
-  padding: 0 8px;
-  margin-bottom: 6px;
+  padding: 0 10px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 160ms, max-height 160ms;
+  max-height: 24px;
+}
+
+.collapsed .sectionLabel {
+  opacity: 0;
+  max-height: 0;
+  margin-bottom: 0;
+}
+
+/* ── Navegação ──────────────────────────────────────────────────────── */
+.nav {
+  padding: 16px 10px 6px;
+  flex-shrink: 0;
 }
 
 .navList {
@@ -60,23 +177,26 @@
   gap: 2px;
 }
 
-/* ── Nav items ──────────────────────────────────────────────────────── */
+/* ── Itens de navegação ─────────────────────────────────────────────── */
 .navItem {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 8px 8px 10px;
-  border-radius: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
   text-decoration: none;
   color: var(--text-secondary);
-  transition: background var(--ease-fast), color var(--ease-fast);
-  position: relative;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   background: none;
   border: none;
   width: 100%;
-  font-family: inherit;
   text-align: left;
+  position: relative;
+  transition: background 180ms, color 180ms, padding 280ms, gap 280ms;
+  white-space: nowrap;
 }
 
 .navItem:hover {
@@ -84,75 +204,67 @@
   color: var(--text-primary);
 }
 
-.navItem:hover .navIcon {
-  background: var(--hover-bg-strong);
-}
+.navItem:active { background: var(--hover-bg-strong); }
 
+/* Estado ativo */
 .navItem.active {
   background: var(--accent-bg);
   color: var(--accent-text);
+  font-weight: 600;
 }
 
-.navItem.active .navIcon {
-  background: var(--accent-bg);
-  color: var(--accent-soft);
-}
-
-.navItem.active .navSub {
-  color: var(--accent-text);
-  opacity: 0.6;
-}
-
+/* Pill indicador à esquerda */
 .activePip {
   position: absolute;
   left: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 52%;
+  height: 56%;
   min-height: 14px;
   background: var(--accent);
   border-radius: 0 3px 3px 0;
 }
 
-/* ── Nav icon box ───────────────────────────────────────────────────── */
+/* Ícone */
 .navIcon {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   background: var(--hover-bg);
-  transition: background var(--ease-fast), color var(--ease-fast);
+  transition: background 180ms;
 }
 
-/* ── Nav text ───────────────────────────────────────────────────────── */
-.navText {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
+.navItem:hover .navIcon { background: var(--hover-bg-strong); }
+.navItem.active .navIcon {
+  background: rgba(59, 130, 246, 0.18);
+  color: var(--accent-soft);
 }
 
+/* Label */
 .navLabel {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  white-space: nowrap;
+  flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 160ms;
 }
 
-.navSub {
-  font-size: 10px;
-  font-weight: 400;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 1px;
+/* Collapsed: centraliza ícone e esconde label */
+.collapsed .navItem {
+  padding: 9px 0;
+  justify-content: center;
+  gap: 0;
+}
+
+.collapsed .navLabel {
+  flex: 0;
+  width: 0;
+  opacity: 0;
 }
 
 /* ── Spacer ─────────────────────────────────────────────────────────── */
@@ -164,10 +276,10 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-/* ── Admin sub-nav ──────────────────────────────────────────────────── */
+/* Sub-navegação admin */
 .subNav {
   list-style: none;
-  margin: 2px 0 4px 42px;
+  margin: 4px 0 2px 44px;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -179,30 +291,27 @@
   display: block;
   padding: 5px 8px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   text-decoration: none;
-  transition: background var(--ease-fast), color var(--ease-fast);
+  transition: background 150ms, color 150ms;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+.subNavItem:hover { background: var(--hover-bg); color: var(--text-primary); }
+.subNavActive { color: var(--accent-text); background: var(--accent-bg); }
 
-.subNavItem:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
-}
-
-.subNavActive {
-  color: var(--accent-text);
-  background: var(--accent-bg);
-}
-
-/* ── Footer actions ─────────────────────────────────────────────────── */
+/* ── Rodapé ─────────────────────────────────────────────────────────── */
 .footer {
-  padding: 6px 10px 14px;
+  padding: 8px 10px 14px;
   border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Ações rápidas (tema + fullscreen) */
+.footerActions {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -218,25 +327,118 @@
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-family: inherit;
-  font-size: 11.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--ease-fast), color var(--ease-fast);
+  transition: background 150ms, color 150ms;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.footerBtn:hover { background: var(--hover-bg); color: var(--text-secondary); }
+.footerBtn:active { background: var(--hover-bg-strong); }
+.footerBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+.footerBtn svg { flex-shrink: 0; opacity: 0.75; }
+
+/* Collapsed: mostrar só ícone centralizado */
+.collapsed .footerBtn {
+  justify-content: center;
+  padding: 10px;
+  gap: 0;
+}
+.collapsed .footerBtn span { width: 0; opacity: 0; overflow: hidden; flex: 0; }
+
+/* Separador */
+.footerDivider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 6px 0;
 }
 
-.footerBtn:hover {
-  background: var(--hover-bg);
-  color: var(--text-secondary);
+/* ── Cartão do usuário ───────────────────────────────────────────────── */
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px 4px;
+  border-radius: 10px;
+  transition: background 150ms;
+  overflow: hidden;
 }
+.userCard:hover { background: var(--hover-bg); }
 
-.footerBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.footerBtn svg {
+/* Avatar com iniciais */
+.userAvatar {
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  opacity: 0.75;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+  user-select: none;
 }
+
+/* Informações do usuário */
+.userInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 160ms;
+}
+
+.userName {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userEmail {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* Botão logout */
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms, background 150ms, color 150ms;
+}
+.userCard:hover .logoutBtn { opacity: 1; }
+.logoutBtn:hover { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.logoutBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Collapsed: userCard só mostra avatar */
+.collapsed .userCard {
+  justify-content: center;
+  padding: 8px 0 4px;
+  gap: 0;
+}
+.collapsed .userInfo { width: 0; flex: 0; opacity: 0; }
+.collapsed .logoutBtn { width: 0; opacity: 0; pointer-events: none; }

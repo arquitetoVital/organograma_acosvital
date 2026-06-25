@@ -1,31 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchAllNodes, insertNode } from '@/lib/orgRepository';
+import { insertNode } from '@/lib/orgRepository';
 import { requireAuth } from '@/lib/apiAuth';
 import { rateLimit, getIp, rateLimitResponse } from '@/lib/rateLimit';
 import { sanitizeNode } from '@/lib/sanitize';
-import { DEV_AUTH_BYPASS } from '@/lib/devAuth';
-import seedNodes from '@/data/orgData.json';
+import { apiGet, handleApiError } from '@/lib/apiClient';
 import type { OrgNode } from '@/types/orgChart';
 
 export const dynamic = 'force-dynamic';
+
+// Shape retornado pela view externa /vw_organograma_nodes
+interface VwNode {
+  id:                  string;
+  name:                string;
+  role:                string;
+  level:               number;
+  parent_id:           string | null;
+  is_sector:           boolean;
+  photo_url:           string | null;
+  sector_color:        string | null;
+  sector_director_of:  string | null;
+  id_ent:              string | null;
+}
+
+function toOrgNode(n: VwNode): OrgNode {
+  return {
+    id:               n.id,
+    name:             n.name          ?? '',
+    role:             n.role          ?? '',
+    level:            n.level,
+    parentId:         n.parent_id     ?? null,
+    isSector:         n.is_sector     ?? false,
+    photoUrl:         n.photo_url     ?? undefined,
+    sectorColor:      n.sector_color  ?? undefined,
+    sectorDirectorOf: n.sector_director_of ?? null,
+    funcionarioId:    n.id_ent        ?? null,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const rl = rateLimit(getIp(request), 'read');
   if (!rl.ok) return rateLimitResponse(rl.retryAfterMs);
 
-  const { ctx, supabase, err } = await requireAuth('viewer');
+  const { err } = await requireAuth('viewer');
   if (err) return err;
 
   try {
-    const nodes = await fetchAllNodes(supabase);
-    // Em desenvolvimento sem sessão real, o RLS retorna lista vazia: cai na
-    // estrutura-semente para que o editor admin fique inspecionável.
-    if (nodes.length === 0 && DEV_AUTH_BYPASS) {
-      return NextResponse.json(seedNodes as OrgNode[]);
-    }
+    const raw = await apiGet<{ total?: number; nodes?: VwNode[] }>('/vw_organograma_nodes');
+    const nodes = (raw.nodes ?? []).map(toOrgNode);
     return NextResponse.json(nodes);
-  } catch {
-    return NextResponse.json({ error: 'Erro ao buscar dados.' }, { status: 500 });
+  } catch (e) {
+    const { msg, status } = handleApiError(e, 'Erro ao buscar dados do organograma.');
+    return NextResponse.json({ error: msg }, { status });
   }
 }
 

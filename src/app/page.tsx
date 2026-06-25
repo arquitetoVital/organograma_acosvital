@@ -7,8 +7,6 @@ import seedNodes from '@/data/orgData.json';
 import styles from './page.module.css';
 import type { OrgNode } from '@/types/orgChart';
 
-export const dynamic = 'force-dynamic';
-
 export default async function Home() {
   let allNodes: OrgNode[] = [];
 

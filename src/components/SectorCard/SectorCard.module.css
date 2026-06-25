@@ -7,6 +7,10 @@
   filter: drop-shadow(0 0 14px rgba(167, 139, 250, 0.5));
 }
 
+.group:active {
+  filter: drop-shadow(0 0 20px rgba(167, 139, 250, 0.75));
+}
+
 .group:focus {
   outline: none;
 }
@@ -20,7 +24,8 @@
 }
 
 .group:hover .border,
+.group:active .border,
 .group:focus-visible .border {
   stroke-opacity: 1;
-  stroke-width: 3;
+  stroke-width: 3.5;
 }

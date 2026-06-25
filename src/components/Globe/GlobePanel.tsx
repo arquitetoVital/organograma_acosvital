@@ -61,14 +61,18 @@ export default function GlobePanel({
               <dt>Coordenadas</dt>
               <dd className={styles.mono}>{selected.lat.toFixed(5)}, {selected.lon.toFixed(5)}</dd>
             </div>
-            <div className={styles.detailRow}>
-              <dt>Cód. Omie</dt>
-              <dd className={styles.mono}>{selected.codigo_omie}</dd>
-            </div>
-            <div className={styles.detailRow}>
-              <dt>Origem</dt>
-              <dd>{selected.source === 'manual' ? 'Cadastrado manualmente' : 'Importado do Omie'}</dd>
-            </div>
+            {(selected.codigo ?? selected.codigo_omie) && (
+              <div className={styles.detailRow}>
+                <dt>Cód. Omie</dt>
+                <dd className={styles.mono}>{selected.codigo ?? selected.codigo_omie}</dd>
+              </div>
+            )}
+            {selected.source && (
+              <div className={styles.detailRow}>
+                <dt>Origem</dt>
+                <dd>{selected.source === 'manual' ? 'Cadastrado manualmente' : 'Importado do Omie'}</dd>
+              </div>
+            )}
           </dl>
 
           <button type="button" className={styles.focusBtn} style={{ background: accent }} onClick={() => onFocus(selected)}>

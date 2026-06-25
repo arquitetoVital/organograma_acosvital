@@ -6,7 +6,10 @@ interface Props {
   color: string;
 }
 
-const CR = 75; // circle radius
+const CR   = 75;  // single director: circle radius
+const PR   = 40;  // paired director: each photo radius
+const CX   = 52;  // paired director: x offset from origin to each photo center
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
 function getInitials(name: string): string {
   return name
@@ -19,17 +22,89 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+function getShortName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
+
 function splitName(name: string): [string, string | null] {
-  // Split on " e " or " & " to get two lines
   const match = name.match(/^(.+?)\s+[e&]\s+(.+)$/i);
   if (match) return [match[1].trim(), match[2].trim()];
-  // Fallback: split at middle word boundary
   const words = name.split(' ');
   const mid = Math.ceil(words.length / 2);
   return [words.slice(0, mid).join(' '), words.slice(mid).join(' ') || null];
 }
 
 export default function CenterCard({ node, color }: Props) {
+  // ── Modo duplo: nome com " & " indica co-diretores (mesma foto para ambos) ─
+  const nameParts = node.name.split(/\s+&\s+/);
+  const isPaired  = nameParts.length >= 2;
+
+  if (isPaired) {
+    const photo  = node.photoUrl ?? null;
+    const name1  = nameParts[0]?.trim() ?? node.name;
+    const name2  = nameParts[1]?.trim() ?? '';
+    const label  = `${getShortName(name1)} & ${getShortName(name2)}`;
+
+    return (
+      <g className={styles.group}>
+        <title>{node.name} — {node.role}</title>
+
+        <defs>
+          <radialGradient id="grad-center" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor={color} stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#142133" stopOpacity={1} />
+          </radialGradient>
+          <clipPath id="clip-center">
+            <circle cx={0} cy={0} r={CR - 1} />
+          </clipPath>
+        </defs>
+
+        {/* Outer glow */}
+        <circle cx={0} cy={0} r={CR + 10} fill={color} fillOpacity={0.07} />
+
+        {/* Dashed ring */}
+        <circle cx={0} cy={0} r={CR + 5} fill="none" stroke={color} strokeWidth={1} strokeOpacity={0.3} strokeDasharray="4 3" />
+
+        {/* Main border */}
+        <circle cx={0} cy={0} r={CR + 2} fill="none" stroke={color} strokeWidth={2.5} strokeOpacity={0.75} className={styles.border} />
+
+        {/* Background */}
+        <circle cx={0} cy={0} r={CR} fill="url(#grad-center)" />
+
+        {/* Initials: JO | & | AV — divididos no interior do círculo */}
+        <text x={-CR * 0.30} y={0} textAnchor="middle" dominantBaseline="central"
+          fill={color} fontSize={CR * 0.34} fontWeight="700" fontFamily={FONT}>
+          {getInitials(name1)}
+        </text>
+        <line x1={0} y1={-(CR * 0.45)} x2={0} y2={CR * 0.45}
+          stroke={color} strokeWidth={0.8} strokeOpacity={0.20} />
+        <text x={CR * 0.30} y={0} textAnchor="middle" dominantBaseline="central"
+          fill={color} fontSize={CR * 0.34} fontWeight="700" fontFamily={FONT}>
+          {getInitials(name2)}
+        </text>
+
+        {/* Photo (cobre as iniciais) */}
+        {photo && (
+          <image href={photo} x={-CR} y={-CR} width={CR * 2} height={CR * 2}
+            clipPath="url(#clip-center)" preserveAspectRatio="xMidYMid slice" />
+        )}
+
+        {/* Role label */}
+        <text x={0} y={CR + 20} textAnchor="middle" fill={color} fontSize={9} fontWeight="700" letterSpacing="2" fontFamily={FONT} opacity={0.9}>
+          {node.role.toUpperCase()}
+        </text>
+
+        {/* Nome combinado: "Joanes S. & Amanda V." */}
+        <text x={0} y={CR + 38} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={11} fontWeight="700" fontFamily={FONT}>
+          {label}
+        </text>
+      </g>
+    );
+  }
+
+  // ── Modo simples (card único) ──────────────────────────────────────────
   const [nameLine1, nameLine2] = splitName(node.name);
   const initials = getInitials(node.name);
 
@@ -51,98 +126,38 @@ export default function CenterCard({ node, color }: Props) {
       <circle cx={0} cy={0} r={CR + 10} fill={color} fillOpacity={0.07} />
 
       {/* Second ring (decorative) */}
-      <circle
-        cx={0}
-        cy={0}
-        r={CR + 5}
-        fill="none"
-        stroke={color}
-        strokeWidth={1}
-        strokeOpacity={0.3}
-        strokeDasharray="4 3"
-      />
+      <circle cx={0} cy={0} r={CR + 5} fill="none" stroke={color} strokeWidth={1} strokeOpacity={0.3} strokeDasharray="4 3" />
 
       {/* Main border */}
-      <circle
-        cx={0}
-        cy={0}
-        r={CR + 2}
-        fill="none"
-        stroke={color}
-        strokeWidth={2.5}
-        strokeOpacity={0.75}
-        className={styles.border}
-      />
+      <circle cx={0} cy={0} r={CR + 2} fill="none" stroke={color} strokeWidth={2.5} strokeOpacity={0.75} className={styles.border} />
 
-      {/* Background com gradiente da cor do nível */}
+      {/* Background */}
       <circle cx={0} cy={0} r={CR} fill="url(#grad-center)" />
 
       {/* Initials fallback */}
-      <text
-        x={0}
-        y={0}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill={color}
-        fontSize={CR * 0.42}
-        fontWeight="700"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-      >
+      <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={CR * 0.42} fontWeight="700" fontFamily={FONT}>
         {initials}
       </text>
 
-      {/* Photo (covers initials when loaded) */}
+      {/* Photo */}
       {node.photoUrl && (
-        <image
-          href={node.photoUrl}
-          x={-CR}
-          y={-CR}
-          width={CR * 2}
-          height={CR * 2}
-          clipPath="url(#clip-center)"
-          preserveAspectRatio="xMidYMid slice"
-        />
+        <image href={node.photoUrl} x={-CR} y={-CR} width={CR * 2} height={CR * 2}
+          clipPath="url(#clip-center)" preserveAspectRatio="xMidYMid slice" />
       )}
 
-      {/* Role label — e.g. "DIRETORIA" */}
-      <text
-        x={0}
-        y={CR + 20}
-        textAnchor="middle"
-        fill={color}
-        fontSize={9}
-        fontWeight="700"
-        letterSpacing="2"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-        opacity={0.9}
-      >
+      {/* Role label */}
+      <text x={0} y={CR + 20} textAnchor="middle" fill={color} fontSize={9} fontWeight="700" letterSpacing="2" fontFamily={FONT} opacity={0.9}>
         {node.role.toUpperCase()}
       </text>
 
       {/* Name line 1 */}
-      <text
-        x={0}
-        y={CR + 38}
-        textAnchor="middle"
-        style={{ fill: 'var(--text-primary)' }}
-        fontSize={12}
-        fontWeight="700"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-      >
+      <text x={0} y={CR + 38} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={12} fontWeight="700" fontFamily={FONT}>
         {nameLine1}
       </text>
 
-      {/* Name line 2 (if present) */}
+      {/* Name line 2 */}
       {nameLine2 && (
-        <text
-          x={0}
-          y={CR + 54}
-          textAnchor="middle"
-          style={{ fill: 'var(--text-primary)' }}
-          fontSize={12}
-          fontWeight="700"
-          fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-        >
+        <text x={0} y={CR + 54} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={12} fontWeight="700" fontFamily={FONT}>
           {nameLine2}
         </text>
       )}

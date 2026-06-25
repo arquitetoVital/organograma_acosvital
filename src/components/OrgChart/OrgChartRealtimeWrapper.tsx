@@ -53,6 +53,27 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
   );
   const connections = useMemo(() => calculateConnections(positions), [positions]);
 
+  async function loadFreshNodes() {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/org');
+      if (res.ok) {
+        const data: unknown = await res.json();
+        if (Array.isArray(data)) setNodes(data as OrgNode[]);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  // Busca dados frescos ao montar — captura mudanças feitas em outras páginas
+  useEffect(() => {
+    let active = true;
+    loadFreshNodes().catch(() => { if (active) setIsSyncing(false); });
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
     let debounce: ReturnType<typeof setTimeout>;
@@ -64,18 +85,7 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
         { event: '*', schema: 'organograma', table: 'org_nodes' },
         () => {
           clearTimeout(debounce);
-          debounce = setTimeout(async () => {
-            setIsSyncing(true);
-            try {
-              const res = await fetch('/api/org');
-              if (res.ok) {
-                const data: unknown = await res.json();
-                if (Array.isArray(data)) setNodes(data as OrgNode[]);
-              }
-            } finally {
-              setIsSyncing(false);
-            }
-          }, 350);
+          debounce = setTimeout(() => loadFreshNodes().catch(() => {}), 350);
         },
       )
       .subscribe();
@@ -84,6 +94,7 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
       clearTimeout(debounce);
       supabase.removeChannel(channel);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

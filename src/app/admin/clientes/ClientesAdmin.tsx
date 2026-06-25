@@ -1,266 +1,273 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { ClientPoint, OmieClient, fromOmie } from '@/types/client';
-import styles from '../management.module.css';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import styles from '../crud.module.css';
 
-const STORAGE_KEY = 'vital-clients-v2';
-const DOT = '#ef4444';
+// ── Tipos ──────────────────────────────────────────────────────────────────────
+interface Cliente {
+  codigo_parceiro_omie: string;
+  nome_fantasia:        string;
+  email:                string | null;
+  telefone:             string | null;
+  logradouro:           string | null;
+  numero:               string | null;
+  complemento:          string | null;
+  bairro:               string | null;
+  cidade:               string | null;
+  estado:               string | null;
+  cep:                  string | null;
+  latitude_y:           number | null;
+  longitude_x:          number | null;
+}
 
-function load(): ClientPoint[] {
-  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch {}
-  return [];
-}
-function save(list: ClientPoint[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
+interface ApiResponse {
+  clientes: Cliente[];
+  total:    number;
+  page:     number;
+  pages:    number;
 }
 
-async function geocode(address: string): Promise<{ lat: number; lon: number } | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`,
-      { headers: { 'Accept-Language': 'pt-BR' } }
-    );
-    const data = await res.json();
-    if (data.length === 0) return null;
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  } catch { return null; }
+function buildAddress(c: Cliente): string {
+  return [
+    c.logradouro && c.numero ? `${c.logradouro}, ${c.numero}` : c.logradouro,
+    c.complemento,
+    c.bairro,
+    c.cidade && c.estado ? `${c.cidade} – ${c.estado}` : c.cidade ?? c.estado,
+    c.cep,
+  ].filter(Boolean).join(', ');
 }
+
+const LIMIT = 50;
 
 export default function ClientesAdmin() {
-  const [clients,  setClients]  = useState<ClientPoint[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [total,    setTotal]    = useState(0);
+  const [page,     setPage]     = useState(1);
+  const [pages,    setPages]    = useState(1);
   const [search,   setSearch]   = useState('');
-  const [toast,    setToast]    = useState<{ msg: string; err?: boolean } | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
+  const [selected, setSelected] = useState<Cliente | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Add form
-  const [addNome,    setAddNome]    = useState('');
-  const [addAddr,    setAddAddr]    = useState('');
-  const [addLat,     setAddLat]     = useState('');
-  const [addLon,     setAddLon]     = useState('');
-  const [geoOk,      setGeoOk]      = useState(false);
-  const [geoErr,     setGeoErr]     = useState('');
-  const [geocoding,  setGeocoding]  = useState(false);
-  const [adding,     setAdding]     = useState(false);
-
-  // Inline edit
-  const [editId,      setEditId]      = useState<number | null>(null);
-  const [editNome,    setEditNome]    = useState('');
-  const [editAddr,    setEditAddr]    = useState('');
-  const [editLat,     setEditLat]     = useState('');
-  const [editLon,     setEditLon]     = useState('');
-
-  const mountedRef = useRef(false);
-
-  useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-    const stored = load();
-    if (stored.length > 0) setClients(stored);
-    fetch('/data/clients.json')
-      .then(r => r.ok ? r.json() as Promise<OmieClient[]> : Promise.reject())
-      .then(data => {
-        setClients(prev => {
-          const ids = new Set(prev.map(c => c.id));
-          const fresh = data.map(fromOmie).filter(c => !ids.has(c.id));
-          const merged = fresh.length > 0 ? [...prev, ...fresh] : prev;
-          save(merged);
-          return merged;
-        });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const load = useCallback(async (q: string, p: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ q, page: String(p), limit: String(LIMIT) });
+      const res  = await fetch(`/api/admin/clientes?${params}`);
+      const json = (await res.json()) as ApiResponse & { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? `Erro ${res.status}`);
+        setClientes([]);
+        return;
+      }
+      setClientes(json.clientes ?? []);
+      setTotal(json.total    ?? 0);
+      setPage(json.page      ?? 1);
+      setPages(json.pages    ?? 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao carregar clientes.');
+      setClientes([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return clients;
-    const q = search.toLowerCase();
-    return clients.filter(c =>
-      c.nome.toLowerCase().includes(q) || c.endereco.toLowerCase().includes(q)
-    );
-  }, [clients, search]);
+  useEffect(() => { load('', 1); }, [load]);
 
-  function showToast(msg: string, err = false) {
-    setToast({ msg, err });
-    setTimeout(() => setToast(null), 3000);
+  function handleSearch(value: string) {
+    setSearch(value);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { load(value, 1); }, 350);
   }
 
-  async function handleGeocode() {
-    if (!addAddr.trim()) return;
-    setGeocoding(true); setGeoErr(''); setGeoOk(false);
-    const r = await geocode(addAddr);
-    setGeocoding(false);
-    if (!r) { setGeoErr('Endereço não encontrado. Tente ser mais específico.'); return; }
-    setAddLat(r.lat.toFixed(6));
-    setAddLon(r.lon.toFixed(6));
-    setGeoOk(true);
-  }
+  function goPage(p: number) { load(search, p); }
 
-  function handleAdd() {
-    const nome = addNome.trim();
-    const addr = addAddr.trim();
-    const lat  = parseFloat(addLat);
-    const lon  = parseFloat(addLon);
-    if (!nome || !addr) { showToast('Nome e endereço são obrigatórios.', true); return; }
-    if (isNaN(lat) || isNaN(lon)) { showToast('Use o botão Geo ou preencha lat/lon.', true); return; }
-    setAdding(true);
-    const id = Date.now();
-    const newClient: ClientPoint = { id, codigo_omie: id, nome, endereco: addr, lat, lon, source: 'manual' };
-    setClients(prev => { const n = [...prev, newClient]; save(n); return n; });
-    setAddNome(''); setAddAddr(''); setAddLat(''); setAddLon(''); setGeoOk(false); setGeoErr('');
-    setAdding(false);
-    showToast('Cliente adicionado.');
-  }
-
-  function handleDelete(id: number) {
-    setClients(prev => { const n = prev.filter(c => c.id !== id); save(n); return n; });
-    if (editId === id) setEditId(null);
-    showToast('Cliente removido.');
-  }
-
-  function startEdit(c: ClientPoint) {
-    setEditId(c.id);
-    setEditNome(c.nome);
-    setEditAddr(c.endereco);
-    setEditLat(String(c.lat));
-    setEditLon(String(c.lon));
-  }
-
-  function handleSaveEdit() {
-    if (editId === null) return;
-    const nome = editNome.trim();
-    const addr = editAddr.trim();
-    const lat  = parseFloat(editLat);
-    const lon  = parseFloat(editLon);
-    if (!nome || !addr || isNaN(lat) || isNaN(lon)) {
-      showToast('Preencha todos os campos corretamente.', true); return;
-    }
-    setClients(prev => {
-      const n = prev.map(c => c.id === editId ? { ...c, nome, endereco: addr, lat, lon } : c);
-      save(n); return n;
-    });
-    setEditId(null);
-    showToast('Cliente atualizado.');
+  function toggleSelected(c: Cliente) {
+    setSelected(prev => prev?.codigo_parceiro_omie === c.codigo_parceiro_omie ? null : c);
   }
 
   return (
     <div className={styles.page}>
-      {/* Body */}
-      <div className={styles.body}>
-        {/* Add panel */}
-        <div className={styles.addPanel}>
-          <div className={styles.sectionTitle}>Adicionar novo cliente</div>
 
-          <label className={styles.fieldLabel}>
-            Nome do cliente / empresa *
-            <input
-              className={styles.input}
-              placeholder="Ex: Construtora ABC Ltda"
-              value={addNome}
-              onChange={e => setAddNome(e.target.value)}
-            />
-          </label>
-
-          <label className={styles.fieldLabel}>
-            Endereço *
-            <div className={styles.addressRow}>
-              <input
-                className={`${styles.input} ${styles.addressInput}`}
-                placeholder="Rua, cidade, estado…"
-                value={addAddr}
-                onChange={e => { setAddAddr(e.target.value); setGeoOk(false); setGeoErr(''); }}
-                onKeyDown={e => e.key === 'Enter' && handleGeocode()}
-              />
-              <button
-                className={`${styles.geoBtn}${geoOk ? ' ' + styles.geoBtnOk : ''}`}
-                onClick={handleGeocode}
-                disabled={geocoding || !addAddr.trim()}
-              >
-                {geocoding ? '…' : geoOk ? '✓ Geo' : 'Geo'}
-              </button>
-            </div>
-            {geoErr && <span className={styles.geoError}>{geoErr}</span>}
-          </label>
-
-          <div className={styles.coordRow}>
-            <label className={styles.fieldLabel}>
-              Latitude
-              <input className={styles.input} placeholder="-23.550" value={addLat} onChange={e => setAddLat(e.target.value)} />
-            </label>
-            <label className={styles.fieldLabel}>
-              Longitude
-              <input className={styles.input} placeholder="-46.633" value={addLon} onChange={e => setAddLon(e.target.value)} />
-            </label>
-          </div>
-
-          <button className={styles.btnPrimary} onClick={handleAdd} disabled={adding}>
-            + Adicionar cliente
-          </button>
+      {/* Header */}
+      <div className={styles.header}>
+        <div className={styles.breadcrumb}>
+          <span>Admin</span><span>›</span><span>Clientes</span>
         </div>
-
-        {/* List panel */}
-        <div className={styles.listPanel}>
-          <div className={styles.listHeader}>
-            <div className={styles.statsChip}>
-              <span className={styles.statsNum}>{clients.length}</span>
-              <span className={styles.statsLabel}>clientes</span>
-            </div>
-            <input
-              className={styles.searchInput}
-              placeholder="Buscar cliente ou endereço…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className={styles.list}>
-            {loading && <div className={styles.loadingState}>Carregando…</div>}
-            {!loading && filtered.length === 0 && (
-              <div className={styles.emptyState}>
-                {search ? 'Nenhum resultado.' : 'Nenhum cliente ainda.'}
-              </div>
-            )}
-            {filtered.map(c =>
-              editId === c.id ? (
-                <div key={c.id} className={`${styles.row} ${styles.rowEditing}`}>
-                  <div className={styles.dot} style={{ background: DOT }} />
-                  <div className={styles.editForm}>
-                    <input className={styles.input} value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Nome" />
-                    <input className={styles.input} value={editAddr} onChange={e => setEditAddr(e.target.value)} placeholder="Endereço" />
-                    <div className={styles.editCoords}>
-                      <input className={styles.input} value={editLat} onChange={e => setEditLat(e.target.value)} placeholder="Lat" />
-                      <input className={styles.input} value={editLon} onChange={e => setEditLon(e.target.value)} placeholder="Lon" />
-                    </div>
-                    <div className={styles.editActions}>
-                      <button className={styles.btnSave} onClick={handleSaveEdit}>Salvar</button>
-                      <button className={styles.btnSecondary} onClick={() => setEditId(null)}>Cancelar</button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div key={c.id} className={styles.row}>
-                  <div className={styles.dot} style={{ background: DOT }} />
-                  <div className={styles.rowBody}>
-                    <div className={styles.rowName}>{c.nome}</div>
-                    <div className={styles.rowAddr}>{c.endereco}</div>
-                    <div className={styles.rowCoord}>{c.lat.toFixed(4)}, {c.lon.toFixed(4)}</div>
-                  </div>
-                  <div className={styles.rowActions}>
-                    <button className={styles.iconBtn} title="Editar" onClick={() => startEdit(c)}>✏️</button>
-                    <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} title="Remover" onClick={() => handleDelete(c.id)}>🗑</button>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        </div>
+        <div className={styles.headerTitle}>Clientes</div>
+        {!loading && (
+          <span className={styles.headerBadge}>{total} registro{total !== 1 ? 's' : ''}</span>
+        )}
+        <input
+          className={styles.searchInput}
+          style={{ maxWidth: 280, marginLeft: 'auto' }}
+          placeholder="Buscar por nome, código, cidade…"
+          value={search}
+          onChange={e => handleSearch(e.target.value)}
+        />
       </div>
 
-      {toast && (
-        <div className={`${styles.toast}${toast.err ? ' ' + styles.toastErr : ''}`}>
-          {toast.msg}
+      {/* Body */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+
+        {/* Table panel */}
+        <div className={styles.listPanel} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+          {/* Column header */}
+          <div className={styles.clHead}>
+            <div style={{ flex: '0 0 130px' }}>Cód. Omie</div>
+            <div style={{ flex: '1 1 220px' }}>Nome Fantasia</div>
+            <div style={{ flex: '1 1 160px' }}>Cidade / Estado</div>
+            <div style={{ flex: '1 1 180px' }}>E-mail</div>
+            <div style={{ flex: '0 0 140px' }}>Telefone</div>
+            <div style={{ flex: '0 0 32px' }} />
+          </div>
+
+          {/* Rows */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {loading && (
+              <div className={styles.list}>
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className={styles.skeleton} style={{ height: 40, borderRadius: 6, marginBottom: 4 }} />
+                ))}
+              </div>
+            )}
+
+            {!loading && error && (
+              <div className={styles.empty}>
+                <div className={styles.emptyIcon}>⚠️</div>
+                <div className={styles.emptyTitle}>Erro ao carregar clientes</div>
+                <div className={styles.emptyText}>{error}</div>
+                <button className={styles.btnSecondary} style={{ marginTop: 12 }} onClick={() => load(search, page)}>
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && clientes.length === 0 && (
+              <div className={styles.empty}>
+                <div className={styles.emptyIcon}>🌍</div>
+                <div className={styles.emptyTitle}>
+                  {search ? 'Nenhum resultado encontrado.' : 'Nenhum cliente cadastrado.'}
+                </div>
+                <div className={styles.emptyText}>
+                  {search ? 'Tente um termo diferente.' : 'Os dados vêm da integração com o Omie.'}
+                </div>
+              </div>
+            )}
+
+            {!loading && !error && clientes.map(c => (
+              <div
+                key={c.codigo_parceiro_omie}
+                className={`${styles.clRow} ${selected?.codigo_parceiro_omie === c.codigo_parceiro_omie ? styles.clRowActive : ''}`}
+                onClick={() => toggleSelected(c)}
+              >
+                <div style={{ flex: '0 0 130px' }}>
+                  <span className={styles.codeBadge}>{c.codigo_parceiro_omie}</span>
+                </div>
+                <div style={{ flex: '1 1 220px' }}>
+                  <span className={styles.rowName}>{c.nome_fantasia || '—'}</span>
+                </div>
+                <div style={{ flex: '1 1 160px' }}>
+                  <span className={styles.rowSub}>
+                    {[c.cidade, c.estado].filter(Boolean).join(' – ') || '—'}
+                  </span>
+                </div>
+                <div style={{ flex: '1 1 180px' }}>
+                  <span className={styles.rowSub}>{c.email || '—'}</span>
+                </div>
+                <div style={{ flex: '0 0 140px' }}>
+                  <span className={styles.rowSub}>{c.telefone || '—'}</span>
+                </div>
+                <div style={{ flex: '0 0 32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {c.latitude_y && c.longitude_x
+                    ? <span title="Coordenadas na API" style={{ fontSize: 12, opacity: 0.7 }}>📍</span>
+                    : null}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {pages > 1 && !loading && (
+            <div className={styles.pagination}>
+              <button className={styles.pageBtn} disabled={page <= 1} onClick={() => goPage(page - 1)}>
+                ← Anterior
+              </button>
+              <span className={styles.pageInfo}>Página {page} de {pages}</span>
+              <button className={styles.pageBtn} disabled={page >= pages} onClick={() => goPage(page + 1)}>
+                Próxima →
+              </button>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Detail panel */}
+        {selected && (
+          <div className={styles.detailPanel}>
+            <div className={styles.drawerHead}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className={styles.drawerTitle}>{selected.nome_fantasia || '—'}</div>
+                <div className={styles.drawerSubtitle}>Código Omie: {selected.codigo_parceiro_omie}</div>
+              </div>
+              <button className={styles.drawerClose} onClick={() => setSelected(null)}>✕</button>
+            </div>
+
+            <div className={styles.drawerBody}>
+
+              <div className={styles.detailGroup}>
+                <div className={styles.detailGroupTitle}>Contato</div>
+                <div className={styles.detailItem}>
+                  <span className={styles.detailKey}>E-mail</span>
+                  <span className={styles.detailVal}>{selected.email || '—'}</span>
+                </div>
+                <div className={styles.detailItem}>
+                  <span className={styles.detailKey}>Telefone</span>
+                  <span className={styles.detailVal}>{selected.telefone || '—'}</span>
+                </div>
+              </div>
+
+              <div className={styles.detailGroup}>
+                <div className={styles.detailGroupTitle}>Endereço</div>
+                {buildAddress(selected) ? (
+                  <p className={styles.detailAddr}>{buildAddress(selected)}</p>
+                ) : (
+                  <p className={styles.detailAddr} style={{ color: 'var(--text-muted)' }}>Não informado.</p>
+                )}
+                <div className={styles.row2} style={{ marginTop: 8 }}>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailKey}>CEP</span>
+                    <span className={styles.detailVal}>{selected.cep || '—'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailKey}>Estado</span>
+                    <span className={styles.detailVal}>{selected.estado || '—'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {(selected.latitude_y && selected.longitude_x) && (
+                <div className={styles.detailGroup}>
+                  <div className={styles.detailGroupTitle}>Localização</div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailKey}>Lat / Lon</span>
+                    <span className={styles.detailVal}>
+                      {selected.latitude_y.toFixed(5)}, {selected.longitude_x.toFixed(5)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className={styles.infoNotice}>
+                Cadastro de clientes gerenciado via integração Omie.
+              </div>
+
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

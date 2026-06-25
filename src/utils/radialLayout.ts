@@ -208,12 +208,14 @@ export function calculateOverviewLayout(
 /**
  * Layout for the sector detail view.
  *
- * Two modes depending on ring size:
+ * Two modes depending on whether a ring's nodes fit around the circumference
+ * (raio necessário ≤ MAX_RING_R):
  *
- * RING MODE (≤ MAX_ON_RING nodes): even angular distribution, centered on
+ * RING MODE (cabe em volta): even angular distribution, centered on
  *   each parent so "4 children of 1 parent → parent is exactly in the middle."
+ *   Em setores grandes o passo é uniforme (2π/n) → preenche a circunferência.
  *
- * COLUMN MODE (> MAX_ON_RING nodes): children are stacked RADIALLY (outward)
+ * COLUMN MODE (não cabe em volta — caso 40k): children are stacked RADIALLY (outward)
  *   instead of tangentially. Each parent gets a "fan of columns"; each column
  *   is a vertical beam of COL_DEPTH_MAX nodes extending away from the center.
  *   Example: 50 children → ceil(50/12) = 5 columns × 10 rows (≈ "2×5" grid
@@ -229,12 +231,15 @@ export function calculateEvenSectorLayout(
 ): PositionedNode[] {
   const START = -Math.PI / 2;
   const PI2   = 2 * Math.PI;
-  const MIN_GAP      = 6;   // min gap between node edges in ring mode
+  const MIN_GAP_BASE      = 6;   // min gap between node edges in ring mode (scaled dynamically)
+  const RING_ANG_GAP = 60;  // folga angular entre nós vizinhos em anéis esparsos (mais "disposto")
+  const RADIAL_GAP_BASE   = 50;  // folga radial base entre anéis (scaled dynamically)
   const LEVEL_BASE   = 3;   // visualR lookup: nodeRadii[level − LEVEL_BASE]
-  const MAX_ON_RING  = 36;  // threshold: rings with more nodes → column mode
-  const COL_DEPTH    = 12;  // max nodes per radial column
-  const COL_ROW_PX   = 32;  // radial distance between rows in a column (px)
-  const COL_GAP_PX   = 55;  // gap between innermost column row and parent ring
+  const MAX_RING_R   = 1600; // raio máx. de um anel em modo anel; acima disso → modo coluna (40k)
+  const LARGE_SECTOR = 40;   // a partir deste total de pessoas, espalha pela circunferência (passo uniforme)
+  const COL_DEPTH    = 10;  // max nodes per radial column
+  const COL_ROW_PX   = 52;  // radial distance between rows in a column (px)
+  const COL_GAP_PX   = 80;  // gap between innermost column row and parent ring
   const MIN_COL_ANG  = (6  * Math.PI) / 180; // minimum 6° between columns
   const MAX_COL_ANG  = (14 * Math.PI) / 180; // maximum 14° between columns
 
@@ -295,17 +300,48 @@ export function calculateEvenSectorLayout(
   }
   dfs(sectorId);
 
-  // ── Ring-mode dynamic radius (not used for column-mode rings) ──
+  // Raio mínimo p/ os nós de um anel caberem em volta da circunferência sem sobrepor.
+  const ringMinR = (ringNodes: OrgNode[]): number => {
+    const maxVR = Math.max(...ringNodes.map((n) => visualR(n)));
+    return (ringNodes.length * (2 * maxVR + MIN_GAP)) / PI2;
+  };
+  // Um anel "cabe em volta" se esse raio ≤ MAX_RING_R. Acima disso (40k) → modo coluna.
+  const fitsAround = (ringNodes: OrgNode[]): boolean => ringMinR(ringNodes) <= MAX_RING_R;
+
+  // Setor grande → espalha pela volta inteira (passo uniforme) em vez de agrupar no topo.
+  const totalVisible  = [...ringCollect.values()].reduce((s, a) => s + a.length, 0);
+  const sectorIsLarge = totalVisible >= LARGE_SECTOR;
+
+  // Escala o espaçamento proporcionalmente ao tamanho do setor:
+  // sqrt(n / LARGE_SECTOR) cresce suavemente — setores pequenos ficam compactos,
+  // setores grandes ganham fôlego sem saltos bruscos.
+  const spacingScale    = Math.max(1.0, Math.sqrt(totalVisible / LARGE_SECTOR));
+  const MIN_GAP         = MIN_GAP_BASE * spacingScale;
+  const RADIAL_GAP      = RADIAL_GAP_BASE * spacingScale;
+
+  // ── Dynamic ring radius ──
+  // Em modo esparso (poucos nós por anel) os anéis são empilhados de forma COMPACTA:
+  // cada anel nasce logo após a borda do anterior (RADIAL_GAP), em vez de usar os
+  // raios estáticos grandes (150, 300, 475…) que deixam vãos enormes quando há pouca
+  // gente. Quando um anel tem muitos nós, o raio cresce o suficiente para todos
+  // caberem em volta (minR) — preservando o comportamento de setores grandes.
   const dynamicRingR = new Map<number, number>();
-  ringCollect.forEach((ringNodes, ring) => {
-    const staticR = ringRadii[ring] ?? (ring * 200);
-    if (ringNodes.length <= MAX_ON_RING) {
-      const maxVR = Math.max(...ringNodes.map((n) => visualR(n)));
-      const minR  = (ringNodes.length * (2 * maxVR + MIN_GAP)) / PI2;
-      dynamicRingR.set(ring, Math.max(staticR, minR));
+  const centerVR = nodeRadii[0] ?? 52;
+  let prevOuter  = centerVR;  // borda externa do anel anterior (começa no card central)
+  [...ringCollect.keys()].sort((a, b) => a - b).forEach((ring) => {
+    const ringNodes = ringCollect.get(ring)!;
+    const maxVR = Math.max(...ringNodes.map((n) => visualR(n)));
+    if (fitsAround(ringNodes)) {
+      const minR     = ringMinR(ringNodes);              // raio p/ caber em volta
+      const compactR = prevOuter + RADIAL_GAP + maxVR;   // colado ao anterior
+      const r = Math.max(minR, compactR);
+      dynamicRingR.set(ring, r);
+      prevOuter = r + maxVR;
     } else {
       // Column mode — radius is computed per-parent at placement time
+      const staticR = ringRadii[ring] ?? (ring * 200);
       dynamicRingR.set(ring, staticR);
+      prevOuter = staticR; // o outer real é recalculado no placement (outerRByRing)
     }
   });
 
@@ -346,14 +382,23 @@ export function calculateEvenSectorLayout(
     const ringNodes  = ringCollect.get(ring)!;
     const prevPlaced = placedByRing.get(ring - 1) ?? [];
     const prevOuterR = outerRByRing.get(ring - 1) ?? dynamicRingR.get(ring - 1) ?? 0;
-    const useColumns = ring > 1 && ringNodes.length > MAX_ON_RING && prevPlaced.length > 0;
+    const useColumns = ring > 1 && !fitsAround(ringNodes) && prevPlaced.length > 0;
 
     const ringPlaced: Array<{ id: string; angle: number }> = [];
 
     if (!useColumns) {
       // ────────────── RING MODE ──────────────
-      const r    = dynamicRingR.get(ring)!;
-      const step = PI2 / ringNodes.length;
+      const r = dynamicRingR.get(ring)!;
+      // Passo angular depende do TAMANHO do setor:
+      //  • Setor grande → passo uniforme (2π/n): espalha os filhos pela volta inteira,
+      //    preenchendo a circunferência (a hierarquia é mantida pelo effectiveAngle,
+      //    que centra cada grupo de filhos no ângulo do pai).
+      //  • Setor pequeno → passo justo (ombro a ombro): nós unidos e próximos, em
+      //    sequência horária a partir do topo, sem grandes vãos.
+      const maxVR     = Math.max(...ringNodes.map((n) => visualR(n)));
+      const tightStep = (2 * maxVR + RING_ANG_GAP) / r;   // nós lado a lado, com folga p/ respirar
+      const evenStep  = PI2 / ringNodes.length;           // volta inteira dividida
+      const step      = sectorIsLarge ? evenStep : Math.min(evenStep, tightStep);
 
       let nodeAngles: Array<{ node: OrgNode; angle: number }>;
 

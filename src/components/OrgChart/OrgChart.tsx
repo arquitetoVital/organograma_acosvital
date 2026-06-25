@@ -55,6 +55,14 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   const activePointers = useRef<Map<number, { x: number; y: number }>>(new Map());
   const lastPinchDist  = useRef<number | null>(null);
   const [cursor, setCursor] = useState<'grab' | 'grabbing'>('grab');
+  // Touch extras
+  const didDrag         = useRef(false);
+  const pointerDownPos  = useRef({ x: 0, y: 0 });
+  const inertiaFrame    = useRef<number | null>(null);
+  const panVelocity     = useRef({ vx: 0, vy: 0 }); // vb units / ms
+  const lastPanEvent    = useRef<{ x: number; y: number; t: number } | null>(null);
+  const lastTap         = useRef<{ x: number; y: number; t: number } | null>(null);
+  const lastInteraction = useRef<number>(Date.now());
   const animFrameRef = useRef<number | null>(null);
 
   // ── Busca, fly-to, highlight e modo de visualização ──────────────────────
@@ -91,7 +99,10 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     animFrameRef.current = requestAnimationFrame(tick);
   }, [setVb]);
 
-  useEffect(() => () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); }, []);
+  useEffect(() => () => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (inertiaFrame.current) cancelAnimationFrame(inertiaFrame.current);
+  }, []);
 
   const openSector = useCallback((id: string) => {
     setSectorStack((prev) => [...prev, id]);
@@ -123,7 +134,9 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     const maxR = sectorDetail.pos.reduce(
       (m, p) => Math.max(m, Math.sqrt(p.x * p.x + p.y * p.y) + p.radius + 80), 200,
     );
-    const size = Math.min(Math.max(maxR * 2, 2200), 4000);
+    // Ajusta ao conteúdo real (+margem). Piso baixo p/ setores compactos não
+    // ficarem perdidos numa viewbox grande; teto preserva o caso de setores enormes.
+    const size = Math.min(Math.max(maxR * 2 + 200, 1200), 4000);
     animateTo({ x: -size / 2, y: -size / 2, w: size, h: size }, 700);
   }, [activeSectorId, sectorDetail, animateTo]);
 
@@ -148,20 +161,23 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   const detailCenter  = useMemo(() => sectorDetail?.pos.find((p) => p.id === activeSectorId) ?? null, [sectorDetail, activeSectorId]);
   const detailOthers  = useMemo(() => sectorDetail?.pos.filter((p) => p.id !== activeSectorId) ?? [], [sectorDetail, activeSectorId]);
 
-  // Ring guide circles — only populated rings, at their actual dynamic radius
+  // Ring guide circles — uma circunferência por NÍVEL hierárquico (supervisor,
+  // analista, aprendiz…), no raio interno de cada nível. Antes deduplicávamos por
+  // faixa de 120px; com os anéis agora compactos isso fundia níveis vizinhos e
+  // apagava círculos. Agrupar por nível garante um guia para cada nível presente.
   const sectorRingGuides = useMemo(() => {
     if (!sectorDetail || !activeSectorId) return [];
-    const byRadius = new Map<number, number>(); // radius → min level
+    const byLevel = new Map<number, number>(); // nível → menor raio
     sectorDetail.pos.forEach((p) => {
-      if (p.id === activeSectorId) return;
-      const r = Math.round(Math.sqrt(p.x * p.x + p.y * p.y));
+      if (p.id === activeSectorId || p.isSector) return;
+      const r = Math.sqrt(p.x * p.x + p.y * p.y);
       if (r < 10) return;
-      const cur = byRadius.get(r);
-      if (cur === undefined || p.level < cur) byRadius.set(r, p.level);
+      const cur = byLevel.get(p.level);
+      if (cur === undefined || r < cur) byLevel.set(p.level, r);
     });
-    return [...byRadius.entries()]
-      .sort(([ra], [rb]) => ra - rb)
-      .map(([r, level]) => ({ r, level }));
+    return [...byLevel.entries()]
+      .map(([level, r]) => ({ r: Math.round(r), level }))
+      .sort((a, b) => a.r - b.r);
   }, [activeSectorId, sectorDetail]);
 
   const visibleDetailOthers = useMemo(() => {
@@ -269,6 +285,58 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     return overviewPosMap.get(highlightId) ?? null;
   }, [highlightId, activeSectorId, sectorDetail, overviewPosMap]);
 
+  // ── Inércia de pan ────────────────────────────────────────────────────
+  const startInertia = useCallback((vx: number, vy: number) => {
+    if (inertiaFrame.current) cancelAnimationFrame(inertiaFrame.current);
+    const DECAY = 0.88;
+    const FRAME_MS = 1000 / 60;
+    let cvx = vx * FRAME_MS;
+    let cvy = vy * FRAME_MS;
+    const tick = () => {
+      cvx *= DECAY;
+      cvy *= DECAY;
+      if (Math.abs(cvx) + Math.abs(cvy) < 0.5) { inertiaFrame.current = null; return; }
+      const cur = vbRef.current;
+      setVb({ ...cur, x: cur.x + cvx, y: cur.y + cvy });
+      inertiaFrame.current = requestAnimationFrame(tick);
+    };
+    inertiaFrame.current = requestAnimationFrame(tick);
+  }, [setVb]);
+
+  // ── Duplo toque → zoom in ─────────────────────────────────────────────
+  const handleDoubleTap = useCallback((clientX: number, clientY: number) => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const cur = vbRef.current;
+    const wx = cur.x + ((clientX - rect.left) / rect.width) * cur.w;
+    const wy = cur.y + ((clientY - rect.top) / rect.height) * cur.h;
+    const newW = Math.max(minW, cur.w * 0.5);
+    const newH = (newW / cur.w) * cur.h;
+    animateTo({
+      x: wx - (wx - cur.x) * (newW / cur.w),
+      y: wy - (wy - cur.y) * (newH / cur.h),
+      w: newW, h: newH,
+    }, 350);
+  }, [animateTo, minW]);
+
+  // ── Auto-reset: volta ao panorama após 3 min sem interação ────────────
+  useEffect(() => {
+    const INACTIVITY_MS = 3 * 60 * 1_000;
+    const id = setInterval(() => {
+      if (Date.now() - lastInteraction.current > INACTIVITY_MS) {
+        setSectorStack([]);
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Qualquer toque/clique na página renova o timer de inatividade
+  useEffect(() => {
+    const refresh = () => { lastInteraction.current = Date.now(); };
+    window.addEventListener('pointerdown', refresh);
+    return () => window.removeEventListener('pointerdown', refresh);
+  }, []);
+
   // ── Wheel zoom ────────────────────────────────────────────────────────
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -296,6 +364,18 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
   // ── Pointer pan & pinch zoom (mouse + touch + pen) ────────────────────
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    // Cancela inércia ao iniciar novo toque
+    if (inertiaFrame.current) { cancelAnimationFrame(inertiaFrame.current); inertiaFrame.current = null; }
+
+    // Captura o pointer para manter eventos mesmo que o dedo saia do SVG
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    didDrag.current = false;
+    pointerDownPos.current = { x: e.clientX, y: e.clientY };
+    lastPanEvent.current = null;
+    panVelocity.current = { vx: 0, vy: 0 };
+
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (activePointers.current.size === 1) {
@@ -304,7 +384,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
       const cur = vbRef.current;
       panOrigin.current = { mouseX: e.clientX, mouseY: e.clientY, vbX: cur.x, vbY: cur.y, vbW: cur.w, vbH: cur.h };
     } else if (activePointers.current.size >= 2) {
-      // Second finger down — cancel pan, start pinch
+      // Segundo dedo → inicia pinch, cancela pan
       isPanning.current = false;
       const ptrs = [...activePointers.current.values()];
       lastPinchDist.current = Math.hypot(ptrs[1].x - ptrs[0].x, ptrs[1].y - ptrs[0].y);
@@ -315,10 +395,17 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
     if (!activePointers.current.has(e.pointerId)) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
+    // Detecta se é arraste (> 8 px de movimento)
+    if (!didDrag.current) {
+      const dx = e.clientX - pointerDownPos.current.x;
+      const dy = e.clientY - pointerDownPos.current.y;
+      if (Math.hypot(dx, dy) > 8) didDrag.current = true;
+    }
+
     const ptrs = [...activePointers.current.values()];
 
     if (ptrs.length >= 2) {
-      // Pinch zoom — zoom toward the midpoint between the two fingers
+      // Pinch zoom — zoom em direção ao ponto médio dos dois dedos
       const [p1, p2] = ptrs;
       const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
       if (lastPinchDist.current !== null && svgRef.current) {
@@ -334,11 +421,28 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
       lastPinchDist.current = dist;
 
     } else if (ptrs.length === 1 && isPanning.current && svgRef.current) {
-      // Single-finger pan
+      // Pan com um dedo
       const rect = svgRef.current.getBoundingClientRect();
       const po   = panOrigin.current;
       const dx   = ((e.clientX - po.mouseX) / rect.width)  * po.vbW;
       const dy   = ((e.clientY - po.mouseY) / rect.height) * po.vbH;
+
+      // Rastreia velocidade para inércia
+      const now = performance.now();
+      const prev = lastPanEvent.current;
+      if (prev) {
+        const dt = now - prev.t;
+        if (dt > 0 && dt < 80) {
+          const sdx = e.clientX - prev.x;
+          const sdy = e.clientY - prev.y;
+          panVelocity.current = {
+            vx: -(sdx / rect.width)  * po.vbW / dt,
+            vy: -(sdy / rect.height) * po.vbH / dt,
+          };
+        }
+      }
+      lastPanEvent.current = { x: e.clientX, y: e.clientY, t: now };
+
       setVb({ ...vbRef.current, x: po.vbX - dx, y: po.vbY - dy });
     }
   };
@@ -349,15 +453,38 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
 
     if (remaining < 2) lastPinchDist.current = null;
 
+    // Duplo toque — dois taps rápidos (< 320 ms) no mesmo lugar
+    if (remaining === 0 && !didDrag.current) {
+      const now = performance.now();
+      const last = lastTap.current;
+      if (last && now - last.t < 320 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 70) {
+        handleDoubleTap(e.clientX, e.clientY);
+        lastTap.current = null;
+      } else {
+        lastTap.current = { x: e.clientX, y: e.clientY, t: now };
+      }
+    }
+
+    // Inércia ao levantar o dedo com velocidade
+    if (remaining === 0 && isPanning.current && didDrag.current) {
+      const age = performance.now() - (lastPanEvent.current?.t ?? 0);
+      if (age < 80) {
+        const { vx, vy } = panVelocity.current;
+        if (Math.hypot(vx, vy) * (1000 / 60) > 0.5) startInertia(vx, vy);
+      }
+    }
+
     if (remaining === 1) {
-      // One finger remains — restart pan from its current position
+      // Um dedo ainda pressionado — reinicia pan a partir da posição atual
       const [ptr] = activePointers.current.values();
       isPanning.current = true;
       const cur = vbRef.current;
       panOrigin.current = { mouseX: ptr.x, mouseY: ptr.y, vbX: cur.x, vbY: cur.y, vbW: cur.w, vbH: cur.h };
+      lastPanEvent.current = null;
     } else if (remaining === 0) {
       isPanning.current = false;
       setCursor('grab');
+      lastPanEvent.current = null;
     }
   };
 
@@ -369,7 +496,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
       const maxR = sectorDetail.pos.reduce(
         (m, p) => Math.max(m, Math.sqrt(p.x * p.x + p.y * p.y) + p.radius + 80), 200,
       );
-      const size = Math.min(Math.max(maxR * 2, 2200), 4000);
+      const size = Math.min(Math.max(maxR * 2 + 200, 1200), 4000);
       animateTo({ x: -size / 2, y: -size / 2, w: size, h: size }, 500);
     } else {
       animateTo(OVERVIEW_VB, 500);
@@ -390,7 +517,10 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
       const dist = Math.sqrt(mx * mx + my * my);
       const nx = dist > 0 ? mx / dist : 0;
       const ny = dist > 0 ? my / dist : 0;
-      const pull = dist * 0.15;
+      // Limita o pull ao comprimento real da conexão para evitar curvas que
+      // "voltam" quando os nós estão muito distantes da origem (setores grandes).
+      const connLen = Math.sqrt((c.toX - c.fromX) ** 2 + (c.toY - c.fromY) ** 2);
+      const pull = Math.min(dist * 0.15, connLen * 0.35);
       const d = `M ${c.fromX} ${c.fromY} Q ${nx * (dist - pull)} ${ny * (dist - pull)} ${c.toX} ${c.toY}`;
       return (
         <g key={`${c.fromId}-${c.toId}`}>
@@ -947,7 +1077,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
                 key={node.id}
                 node={node}
                 color={node.sectorColor ?? levelColors[2]}
-                onClick={() => openSector(node.id)}
+                onClick={() => { if (!didDrag.current) openSector(node.id); }}
               />
             ))}
 
@@ -988,7 +1118,7 @@ export default function OrgChart({ positions, connections, allNodes, levelNames,
                 key={node.id}
                 node={node}
                 color={node.sectorColor ?? levelColors[3]}
-                onClick={() => openSector(node.id)}
+                onClick={() => { if (!didDrag.current) openSector(node.id); }}
               />
             ))}
 

@@ -8,11 +8,32 @@ export const metadata: Metadata = {
 
 const CARDS = [
   {
-    href:       '/admin/organograma',
+    href:       '/admin/funcionarios',
     icon:       '👥',
-    title:      'Organograma',
-    desc:       'Cadastrar e editar pessoas, setores e hierarquias da empresa',
+    title:      'Funcionários',
+    desc:       'Cadastrar funcionários — gera automaticamente o nó no organograma',
     colorStyle: styles.cardBlue,
+  },
+  {
+    href:       '/admin/cargos',
+    icon:       '🏷',
+    title:      'Cargos',
+    desc:       'Gerenciar cargos e seus níveis hierárquicos',
+    colorStyle: styles.cardPurple,
+  },
+  {
+    href:       '/admin/setores',
+    icon:       '🏗',
+    title:      'Setores',
+    desc:       'Criar e organizar setores e sub-setores da empresa',
+    colorStyle: styles.cardOrange,
+  },
+  {
+    href:       '/admin/unidades/cadastro',
+    icon:       '🏢',
+    title:      'Unidades',
+    desc:       'Cadastrar matrizes e filiais da empresa',
+    colorStyle: styles.cardGreen,
   },
   {
     href:       '/admin/clientes',
@@ -20,13 +41,6 @@ const CARDS = [
     title:      'Clientes',
     desc:       'Adicionar e gerenciar clientes no mapa global',
     colorStyle: styles.cardRed,
-  },
-  {
-    href:       '/admin/unidades',
-    icon:       '🏢',
-    title:      'Unidades',
-    desc:       'Cadastrar e gerenciar as filiais e unidades no mapa',
-    colorStyle: styles.cardGreen,
   },
 ] as const;
 
