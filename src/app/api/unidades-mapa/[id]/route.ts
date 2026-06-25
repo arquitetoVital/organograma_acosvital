@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { fetchAllPages } from '@/lib/apiClient';
+import { apiGet } from '@/lib/apiClient';
 
 export const dynamic = 'force-dynamic';
 
-interface ApiUnidade {
+export interface ApiUnidadeDetail {
   id:                  string;
-  nome_fantasia:       string;
+  cnpj:                string;
   razao_social:        string;
+  nome_fantasia:       string;
   tipo_unidade:        'matriz' | 'filial';
   matriz_id:           string | null;
   nome_fantasia_matriz: string | null;
@@ -26,17 +27,16 @@ interface ApiUnidade {
   longitude_x:         number | null;
 }
 
-export async function GET() {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
   try {
-    const all = await fetchAllPages<ApiUnidade>('/mapa_unidades', 'unidades', {}, 50);
-    const withCoords = all.filter(
-      (u) =>
-        u.latitude_y  != null && !isNaN(Number(u.latitude_y)) &&
-        u.longitude_x != null && !isNaN(Number(u.longitude_x)),
-    );
-    return NextResponse.json({ unidades: withCoords, total: withCoords.length });
+    const data = await apiGet<ApiUnidadeDetail>(`/mapa_unidades/${id}`);
+    return NextResponse.json(data);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Erro ao buscar unidades.';
+    const msg = e instanceof Error ? e.message : 'Erro ao buscar unidade.';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

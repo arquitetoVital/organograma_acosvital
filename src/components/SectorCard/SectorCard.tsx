@@ -33,7 +33,8 @@ export default function SectorCard({ node, color, onClick }: Props) {
     <g
       transform={`translate(${node.x}, ${node.y})`}
       className={styles.group}
-      onClick={onClick}
+      data-sector-id={node.id}
+      onClick={(e) => { if (e.detail === 0) onClick(); }}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       role="button"
       tabIndex={0}

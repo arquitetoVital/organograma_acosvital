@@ -88,6 +88,7 @@ export default function OrgChart({
   const lastTap = useRef<{ x: number; y: number; t: number } | null>(null);
   const lastInteraction = useRef<number>(Date.now());
   const animFrameRef = useRef<number | null>(null);
+  const pressedSectorIdRef = useRef<string | null>(null);
 
   // ── Busca, fly-to, highlight e modo de visualização ──────────────────────
   const [viewMode, setViewMode] = useState<"radial" | "tree">("radial");
@@ -175,11 +176,7 @@ export default function OrgChart({
     (id: string) => {
       // Supabase importa setores com prefixo 'sec-'; a API externa usa o UUID puro.
       // Normaliza para o UUID canônico para que fetchChildren e getSubtree coincidam.
-      console.log("📍 openSector chamado com ID:", id); // ← ADD
-
       const canonId = id.startsWith("sec-") ? id.slice(4) : id;
-
-      console.log("📍 ID canônico:", canonId); // ← ADD
       setSectorStack((prev) => [...prev, canonId]);
       fetchChildren(canonId);
     },
@@ -521,6 +518,17 @@ export default function OrgChart({
     lastPanEvent.current = null;
     panVelocity.current = { vx: 0, vy: 0 };
 
+    // Registra qual setor (se algum) foi pressionado para abrir no pointerup
+    pressedSectorIdRef.current = null;
+    {
+      let el = e.target as Element | null;
+      while (el && el !== e.currentTarget) {
+        const sid = el.getAttribute("data-sector-id");
+        if (sid) { pressedSectorIdRef.current = sid; break; }
+        el = el.parentElement;
+      }
+    }
+
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (activePointers.current.size === 1) {
@@ -536,8 +544,9 @@ export default function OrgChart({
         vbH: cur.h,
       };
     } else if (activePointers.current.size >= 2) {
-      // Segundo dedo → inicia pinch, cancela pan
+      // Segundo dedo → inicia pinch, cancela pan e qualquer setor pressionado
       isPanning.current = false;
+      pressedSectorIdRef.current = null;
       const ptrs = [...activePointers.current.values()];
       lastPinchDist.current = Math.hypot(
         ptrs[1].x - ptrs[0].x,
@@ -554,7 +563,10 @@ export default function OrgChart({
     if (!didDrag.current) {
       const dx = e.clientX - pointerDownPos.current.x;
       const dy = e.clientY - pointerDownPos.current.y;
-      if (Math.hypot(dx, dy) > 8) didDrag.current = true;
+      if (Math.hypot(dx, dy) > 8) {
+        didDrag.current = true;
+        pressedSectorIdRef.current = null; // arraste cancela abertura de setor
+      }
     }
 
     const ptrs = [...activePointers.current.values()];
@@ -614,7 +626,7 @@ export default function OrgChart({
 
     if (remaining < 2) lastPinchDist.current = null;
 
-    // Duplo toque — dois taps rápidos (< 320 ms) no mesmo lugar
+    // Tap único / duplo toque
     if (remaining === 0 && !didDrag.current) {
       const now = performance.now();
       const last = lastTap.current;
@@ -623,12 +635,19 @@ export default function OrgChart({
         now - last.t < 320 &&
         Math.hypot(e.clientX - last.x, e.clientY - last.y) < 70
       ) {
+        // Duplo toque → zoom in (cancela abertura de setor)
         handleDoubleTap(e.clientX, e.clientY);
         lastTap.current = null;
+        pressedSectorIdRef.current = null;
       } else {
         lastTap.current = { x: e.clientX, y: e.clientY, t: now };
+        // Tap único → abre setor se foi pressionado em um
+        if (pressedSectorIdRef.current) {
+          openSector(pressedSectorIdRef.current);
+        }
       }
     }
+    pressedSectorIdRef.current = null;
 
     // Inércia ao levantar o dedo com velocidade
     if (remaining === 0 && isPanning.current && didDrag.current) {
@@ -1593,10 +1612,7 @@ export default function OrgChart({
                       key={node.id}
                       node={node}
                       color={node.sectorColor ?? levelColors[2]}
-                      onClick={() => {
-                        console.log("🖱️ CLIQUE NO SETOR:", node.id, node.name);
-                        if (!didDrag.current) openSector(node.id);
-                      }}
+                      onClick={() => openSector(node.id)}
                     />
                   ))}
 
@@ -1654,9 +1670,7 @@ export default function OrgChart({
                       key={node.id}
                       node={node}
                       color={node.sectorColor ?? levelColors[3]}
-                      onClick={() => {
-                        if (!didDrag.current) openSector(node.id);
-                      }}
+                      onClick={() => openSector(node.id)}
                     />
                   ))}
 

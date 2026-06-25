@@ -96,7 +96,7 @@ export const NVL_LABELS: Record<number, string> = {
   5:  'Gerente',
   6:  'Coordenador',
   7:  'Supervisor',
-  8:  'Analista Sênior',
+  8:  'Líder de Equipe',
   9:  'Analista',
   10: 'Assistente / Auxiliar',
   11: 'Auxiliar / Estagiário',

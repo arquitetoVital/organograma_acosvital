@@ -15,6 +15,24 @@ export interface ApiCliente {
   longitude_x:          number | null;
 }
 
+/** Campos extras carregados sob demanda ao selecionar uma unidade. */
+export interface ClientPointDetail {
+  cnpj?:               string;
+  razao_social?:       string;
+  tipo_unidade?:       'matriz' | 'filial';
+  nome_fantasia_matriz?: string | null;
+  nome_contato?:       string;
+  email?:              string;
+  telefone?:           string | null;
+  celular?:            string | null;
+  homepage?:           string | null;
+  logradouro?:         string | null;
+  numero?:             string | null;
+  complemento?:        string | null;
+  bairro?:             string | null;
+  cep?:                string | null;
+}
+
 /** Ponto enriquecido usado internamente pelo globo de clientes */
 export interface ClientPoint {
   id:        number;
@@ -25,6 +43,8 @@ export interface ClientPoint {
   endereco:  string;
   lat:       number;
   lon:       number;
+  /** Campos detalhados carregados sob demanda (apenas unidades). */
+  detail?:   ClientPointDetail;
   // ── Campos legados (usado por Unidades / GlobeSidebar) ──────────────────
   /** @deprecated use codigo */
   codigo_omie?: number;

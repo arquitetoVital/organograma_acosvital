@@ -13,7 +13,6 @@ import { useToast }         from '@/hooks/useToast';
 import { useSyncIds }       from '@/hooks/useSyncIds';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { levelNames, levelColors } from '@/data/orgData';
-import { createClient } from '@/lib/supabase/client';
 import type { OrgNode } from '@/types/orgChart';
 import styles from '../page.module.css';
 
@@ -185,28 +184,6 @@ export default function OrganogramaEditor() {
 
   useEffect(() => { refreshNodes(); }, [refreshNodes]);
 
-  // ── Sincronização em tempo real ──────────────────────────────────────────
-  useEffect(() => {
-    const supabase = createClient();
-    let debounceTimer: ReturnType<typeof setTimeout>;
-
-    const channel = supabase
-      .channel('organograma_admin_realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'organograma', table: 'org_nodes' },
-        () => {
-          clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(() => refreshNodes(), 350);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      clearTimeout(debounceTimer);
-      supabase.removeChannel(channel);
-    };
-  }, [refreshNodes]);
 
   // ── Ações de dados ───────────────────────────────────────────────────────
 

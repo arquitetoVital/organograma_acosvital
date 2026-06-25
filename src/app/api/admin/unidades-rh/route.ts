@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       cidade:        String(b.cidade).trim(),
       estado:        String(b.estado).trim().toUpperCase(),
       cep,
+      latitude_y:    b.latitude_y  != null ? Number(b.latitude_y)  : null,
+      longitude_x:   b.longitude_x != null ? Number(b.longitude_x) : null,
       id_origem:     b.id_origem     ?? null,
     });
     return NextResponse.json(data, { status: 201 });

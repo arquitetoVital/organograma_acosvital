@@ -11,7 +11,11 @@ function buildPoints(clientes: ApiCliente[]): ClientPoint[] {
     .map(c => toClientPoint(c, Number(c.latitude_y), Number(c.longitude_x)));
 }
 
-export default function ClientesView() {
+interface ClientesViewProps {
+  canViewDetails?: boolean;
+}
+
+export default function ClientesView({ canViewDetails = false }: ClientesViewProps) {
   const [points,  setPoints]  = useState<ClientPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +40,7 @@ export default function ClientesView() {
       loading={loading}
       itemLabel={{ singular: 'cliente', plural: 'clientes' }}
       loadingText="Carregando clientes…"
+      readOnly={!canViewDetails}
     />
   );
 }

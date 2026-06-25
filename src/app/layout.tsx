@@ -46,8 +46,8 @@ export default async function RootLayout({
         supabase.rpc('get_my_role'),
         supabase.auth.getUser(),
       ]);
-      isAdmin = roleData === 'admin';
       userEmail = user?.email;
+      isAdmin = roleData === 'admin' || roleData === 'editor';
     } catch {}
   }
 

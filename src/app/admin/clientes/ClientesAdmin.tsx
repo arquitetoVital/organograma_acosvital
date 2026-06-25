@@ -284,13 +284,14 @@ export default function ClientesAdmin() {
                 </div>
               </div>
 
-              {(selected.latitude_y && selected.longitude_x) && (
+              {(selected.latitude_y != null && selected.longitude_x != null &&
+                !isNaN(Number(selected.latitude_y)) && !isNaN(Number(selected.longitude_x))) && (
                 <div className={styles.detailGroup}>
                   <div className={styles.detailGroupTitle}>Localização</div>
                   <div className={styles.detailItem}>
                     <span className={styles.detailKey}>Lat / Lon</span>
                     <span className={styles.detailVal} style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
-                      {selected.latitude_y.toFixed(5)}, {selected.longitude_x.toFixed(5)}
+                      {Number(selected.latitude_y).toFixed(5)}, {Number(selected.longitude_x).toFixed(5)}
                     </span>
                   </div>
                 </div>

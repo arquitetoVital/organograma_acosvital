@@ -37,6 +37,8 @@ export async function PUT(
   if (b.cep !== undefined) {
     patch.cep = String(b.cep).replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2');
   }
+  if (b.latitude_y  !== undefined) patch.latitude_y  = b.latitude_y  != null ? Number(b.latitude_y)  : null;
+  if (b.longitude_x !== undefined) patch.longitude_x = b.longitude_x != null ? Number(b.longitude_x) : null;
 
   if (patch.tipo_unidade === 'filial' && !patch.matriz_id) {
     return NextResponse.json({ error: 'Filial requer matriz_id.' }, { status: 422 });

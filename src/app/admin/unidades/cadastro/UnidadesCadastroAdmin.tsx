@@ -41,6 +41,7 @@ export default function UnidadesCadastroAdmin() {
   const [form,       setForm]       = useState<UndForm>(BLANK);
   const [editing,    setEditing]    = useState<Unidade | null>(null);
   const [saving,     setSaving]     = useState(false);
+  const [geoState,   setGeoState]   = useState<'idle' | 'geocoding' | 'ok' | 'failed'>('idle');
   const [cepLoading, setCepLoading] = useState(false);
   const [toast,      setToast]      = useState<{ msg: string; err: boolean } | null>(null);
   const [confirm,    setConfirm]    = useState<Unidade | null>(null);
@@ -119,7 +120,19 @@ export default function UnidadesCadastroAdmin() {
     });
   }
 
-  function cancelEdit() { setEditing(null); setForm(BLANK); }
+  function cancelEdit() { setEditing(null); setForm(BLANK); setGeoState('idle'); }
+
+  async function geocodeForm(f: UndForm): Promise<{ lat: number; lon: number } | null> {
+    const parts = [f.logradouro, f.numero, f.bairro, f.cidade, f.estado, 'Brasil'].filter(Boolean);
+    if (!parts.length) return null;
+    try {
+      const url  = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(parts.join(', '))}`;
+      const res  = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
+      const data = await res.json() as Array<{ lat: string; lon: string }>;
+      if (!data.length) return null;
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    } catch { return null; }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -132,19 +145,29 @@ export default function UnidadesCadastroAdmin() {
     }
     setSaving(true);
     try {
+      setGeoState('geocoding');
+      const coords = await geocodeForm(form);
+      setGeoState(coords ? 'ok' : 'failed');
+      if (!coords) showToast('Endereço não encontrado no mapa — coordenadas serão nulas.', false);
+
       const url    = editing ? `/api/admin/unidades-rh/${editing.id}` : '/api/admin/unidades-rh';
       const method = editing ? 'PUT' : 'POST';
       const res    = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, matriz_id: form.matriz_id || null }),
+        body: JSON.stringify({
+          ...form,
+          matriz_id:   form.matriz_id || null,
+          latitude_y:  coords?.lat ?? null,
+          longitude_x: coords?.lon ?? null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
       showToast(editing ? 'Unidade atualizada.' : 'Unidade criada.');
       cancelEdit();
       await load();
-    } finally { setSaving(false); }
+    } finally { setSaving(false); setGeoState('idle'); }
   }
 
   async function handleDelete(u: Unidade) {
@@ -378,7 +401,13 @@ export default function UnidadesCadastroAdmin() {
               disabled={saving}
               onClick={handleSubmit as unknown as React.MouseEventHandler}
             >
-              {saving ? 'Salvando…' : editing ? 'Salvar alterações' : '+ Criar unidade'}
+              {saving && geoState === 'geocoding'
+                ? 'Geocodificando…'
+                : saving
+                  ? 'Salvando…'
+                  : editing
+                    ? 'Salvar alterações'
+                    : '+ Criar unidade'}
             </button>
           </div>
         </div>

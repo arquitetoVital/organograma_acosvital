@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import OrgChart from '@/components/OrgChart/OrgChart';
 import {
   calculateOverviewLayout, calculateConnections,
@@ -71,29 +70,6 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
     let active = true;
     loadFreshNodes().catch(() => { if (active) setIsSyncing(false); });
     return () => { active = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const supabase = createClient();
-    let debounce: ReturnType<typeof setTimeout>;
-
-    const channel = supabase
-      .channel('org_nodes_overview')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'organograma', table: 'org_nodes' },
-        () => {
-          clearTimeout(debounce);
-          debounce = setTimeout(() => loadFreshNodes().catch(() => {}), 350);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      clearTimeout(debounce);
-      supabase.removeChannel(channel);
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
