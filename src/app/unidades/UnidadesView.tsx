@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import GlobeExplorer from '@/components/Globe/GlobeExplorer';
 import type { ClientPoint, ClientPointDetail } from '@/types/client';
+import { cachedFetch, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 interface ApiUnidade {
   id:            string;
@@ -50,16 +51,20 @@ function toPoint(u: ApiUnidade): ClientPoint {
 
 export default function UnidadesView() {
   const [points,  setPoints]  = useState<ClientPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Sem spinner se cache estiver quente
+  const [loading, setLoading] = useState(
+    () => !isCacheHit(CACHE_KEYS.UNIDADES, CACHE_TTL.LONG),
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/unidades-mapa')
-      .then(r => r.json())
-      .then((json: { unidades: ApiUnidade[] }) => {
-        if (!cancelled) setPoints((json.unidades ?? []).map(toPoint));
-      })
+    cachedFetch<{ unidades: ApiUnidade[] }>(
+      CACHE_KEYS.UNIDADES,
+      () => fetch('/api/unidades-mapa').then(r => r.json()),
+      CACHE_TTL.LONG,
+    )
+      .then(json => { if (!cancelled) setPoints((json.unidades ?? []).map(toPoint)); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
 

@@ -7,6 +7,7 @@ import { CARGO_LEVELS, NVL_LABELS } from '@/types/adminCore';
 import { levelColors } from '@/data/orgData';
 import { IcoEdit, IcoTrash, IcoSearch, IcoEmpty } from '../_icons';
 import styles from '../crud.module.css';
+import { cachedFetch, invalidateCache, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 function LvlBadge({ nvl }: { nvl: number }) {
   const color = levelColors[nvl] ?? '#94a3b8';
@@ -24,7 +25,9 @@ const BLANK = { nome: '', nvl_permissao: 4, descricao: '', ativo: true };
 
 export default function CargosAdmin() {
   const [cargos,  setCargos]  = useState<Cargo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => !isCacheHit(CACHE_KEYS.ADMIN_CARGOS, CACHE_TTL.ADMIN),
+  );
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState<'todos' | 'ativos' | 'inativos'>('ativos');
   const [form,    setForm]    = useState(BLANK);
@@ -38,10 +41,17 @@ export default function CargosAdmin() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) invalidateCache(CACHE_KEYS.ADMIN_CARGOS);
     setLoading(true);
-    const res = await fetch('/api/admin/cargos');
-    if (res.ok) setCargos(await res.json());
+    try {
+      const data = await cachedFetch<Cargo[]>(
+        CACHE_KEYS.ADMIN_CARGOS,
+        () => fetch('/api/admin/cargos').then(r => r.json()),
+        CACHE_TTL.ADMIN,
+      );
+      setCargos(data);
+    } catch {}
     setLoading(false);
   }, []);
 
@@ -88,7 +98,7 @@ export default function CargosAdmin() {
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
       showToast(editing ? 'Cargo atualizado.' : 'Cargo criado.');
       cancelEdit();
-      await load();
+      await load(true);
     } finally { setSaving(false); }
   }
 
@@ -99,7 +109,7 @@ export default function CargosAdmin() {
     if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', true); return; }
     showToast('Cargo removido.');
     if (editing?.id === c.id) cancelEdit();
-    await load();
+    await load(true);
   }
 
   const selectedColor = levelColors[form.nvl_permissao] ?? '#94a3b8';

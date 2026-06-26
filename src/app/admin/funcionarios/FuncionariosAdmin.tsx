@@ -7,6 +7,7 @@ import type { Funcionario, Cargo, Setor, Unidade } from '@/types/adminCore';
 import { NVL_LABELS } from '@/types/adminCore';
 import { levelColors } from '@/data/orgData';
 import styles from '../crud.module.css';
+import { cachedFetch, invalidateCache, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 // ── Máscaras ──────────────────────────────────────────────────────────────────
 const maskCPF   = (v: string) => v.replace(/\D/g,'').slice(0,11).replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{2})$/,'$1-$2');
@@ -533,18 +534,23 @@ export default function FuncionariosAdmin() {
 
   const loadDeps = useCallback(async () => {
     const [rc, rs, ru] = await Promise.all([
-      fetch('/api/admin/cargos'),
-      fetch('/api/admin/setores'),
-      fetch('/api/admin/unidades-rh'),
+      cachedFetch<Cargo[]>(CACHE_KEYS.ADMIN_CARGOS,  () => fetch('/api/admin/cargos').then(r => r.json()),       CACHE_TTL.ADMIN),
+      cachedFetch<Setor[]>(CACHE_KEYS.ADMIN_SETORES, () => fetch('/api/admin/setores').then(r => r.json()),      CACHE_TTL.ADMIN),
+      cachedFetch<Unidade[]>(CACHE_KEYS.ADMIN_UNITS, () => fetch('/api/admin/unidades-rh').then(r => r.json()), CACHE_TTL.ADMIN),
     ]);
-    if (rc.ok) setCargos(await rc.json());
-    if (rs.ok) setSetores(await rs.json());
-    if (ru.ok) setUnidades(await ru.json());
+    setCargos(rc);
+    setSetores(rs);
+    setUnidades(ru);
   }, []);
 
-  const loadFuncionarios = useCallback(async () => {
-    const res = await fetch('/api/admin/funcionarios');
-    if (res.ok) setFuncionarios(await res.json());
+  const loadFuncionarios = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) invalidateCache(CACHE_KEYS.ADMIN_FUNCS);
+    const data = await cachedFetch<Funcionario[]>(
+      CACHE_KEYS.ADMIN_FUNCS,
+      () => fetch('/api/admin/funcionarios').then(r => r.json()),
+      CACHE_TTL.ADMIN,
+    );
+    setFuncionarios(data);
   }, []);
 
   useEffect(() => {
@@ -700,13 +706,13 @@ export default function FuncionariosAdmin() {
         if (!coRes.ok) {
           const coJson = await coRes.json();
           showToast(`Diretor salvo, mas erro no co-diretor: ${coJson.error ?? 'desconhecido'}`, true);
-          closeDrawer(); await loadFuncionarios(); return;
+          closeDrawer(); await loadFuncionarios(true); return;
         }
       }
 
       showToast(editing ? 'Funcionário atualizado.' : 'Funcionário cadastrado no organograma.');
       closeDrawer();
-      await loadFuncionarios();
+      await loadFuncionarios(true);
     } finally {
       setSaving(false);
     }
@@ -719,7 +725,7 @@ export default function FuncionariosAdmin() {
     if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', true); return; }
     showToast('Funcionário removido do sistema e do organograma.');
     closeDrawer();
-    await loadFuncionarios();
+    await loadFuncionarios(true);
   }
 
   // Estatísticas
