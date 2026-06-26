@@ -1280,6 +1280,101 @@
   color: var(--text-secondary);
 }
 
+/* ── Mobile (≤767px) ─────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Header */
+  .header { padding: 14px 16px 12px; gap: 8px; }
+  .headerTitle { font-size: 18px; }
+  .breadcrumb, .headerBadge { display: none; }
+
+  /* Stack form + list */
+  .page { height: auto; min-height: 100%; overflow-y: auto; }
+  .body {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .formPanel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    overflow: visible;
+  }
+  .formBody { overflow: visible; max-height: none; }
+
+  .funcLayout { overflow: visible; }
+  .funcTable  { max-height: 55vh; overflow-y: auto; }
+
+  /* Simplify funcionários table: nome + status + actions only */
+  .tableRow,
+  .tableHead {
+    grid-template-columns: minmax(0, 1fr) 72px 44px;
+    gap: 8px;
+    padding: 0 14px;
+  }
+  /* Hide cargo, setor, unidade columns (children 2, 3, 4) */
+  .tableRow > *:nth-child(2),
+  .tableRow > *:nth-child(3),
+  .tableRow > *:nth-child(4),
+  .tableHead > *:nth-child(2),
+  .tableHead > *:nth-child(3),
+  .tableHead > *:nth-child(4) { display: none; }
+
+  /* Simplify clientes table: nome + pin only */
+  .clHead,
+  .clRow {
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 8px;
+    padding: 0 14px;
+  }
+  .clHead > *:nth-child(1),
+  .clRow  > *:nth-child(1),
+  .clHead > *:nth-child(3),
+  .clRow  > *:nth-child(3),
+  .clHead > *:nth-child(4),
+  .clRow  > *:nth-child(4),
+  .clHead > *:nth-child(5),
+  .clRow  > *:nth-child(5) { display: none; }
+
+  /* Detail panel full width, not beside table */
+  .detailPanel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* Drawer full width */
+  .drawer { width: 100%; }
+
+  /* Geo panel */
+  .geoPanel { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+  .geoBar { width: 80px; }
+
+  /* List toolbar */
+  .listToolbar { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+
+  /* Toast */
+  .toast { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+}
+
+/* ── Tablet (768–1023px) ──────────────────────────────────────────────────── */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .body { grid-template-columns: 300px 1fr; }
+  .tableRow,
+  .tableHead {
+    grid-template-columns: minmax(120px, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) 72px 84px;
+  }
+  /* Hide unidade column (4th child) on tablet */
+  .tableRow > *:nth-child(4),
+  .tableHead > *:nth-child(4) { display: none; }
+  .clHead,
+  .clRow {
+    grid-template-columns: 70px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 110px) 20px;
+  }
+  /* Hide email column on tablet */
+  .clHead > *:nth-child(4),
+  .clRow  > *:nth-child(4) { display: none; }
+}
+
 /* ── Reduced motion — respeita preferência do sistema ───────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .skeleton      { animation: none; background: var(--border-subtle); }

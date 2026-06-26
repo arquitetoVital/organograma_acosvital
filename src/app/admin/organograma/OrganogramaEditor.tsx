@@ -390,9 +390,14 @@ export default function OrganogramaEditor() {
             <div className={styles.directorSection}>
               <div className={styles.directorSectionHead}>
                 <span className={styles.directorSectionTag}>DIRETORIA</span>
-                {directors.length > 0 && (
+                {directors.length === 1 && (
                   <span className={styles.directorSectionHint} title="Só existe uma Diretoria central. Diretores adicionais entram como Diretor de Setor.">
                     Centro único — diretores extras viram Diretor de Setor
+                  </span>
+                )}
+                {directors.length >= 2 && (
+                  <span className={styles.directorSectionHint} title="Dois co-diretores são mesclados num único card no organograma.">
+                    👫 Diretoria compartilhada — mesclados no organograma
                   </span>
                 )}
               </div>
@@ -406,10 +411,43 @@ export default function OrganogramaEditor() {
                     + Criar Diretoria
                   </button>
                 </div>
+              ) : directors.length === 1 ? (
+                <>
+                  <div className={styles.directorsGrid}>
+                    {directors.map(director => (
+                      <div
+                        key={director.id}
+                        className={`${styles.directorCard} ${syncingIds.has(director.id) ? styles.pending : ''} ${deletingIds.has(director.id) ? styles.deleting : ''}`}
+                      >
+                        <Avatar photoUrl={director.photoUrl ?? ''} name={director.name} size={52} color={levelColors[0]} />
+                        <div className={styles.directorText}>
+                          <span className={styles.directorTag}>CENTRAL</span>
+                          <span className={styles.directorName}>
+                            {director.name || <em className={styles.noName}>Sem nome</em>}
+                          </span>
+                          <span className={styles.directorRole}>{director.role}</span>
+                        </div>
+                        <div className={styles.directorCardActions}>
+                          {syncingIds.has(director.id) && <span className={styles.syncSpinner} />}
+                          <button className={styles.editIconBtn} title="Editar" onClick={() => setDirectorBeingEdited(director)}>✏</button>
+                          <button className={`${styles.editIconBtn} ${styles.dangerBtn}`} title="Excluir" onClick={() => requestDeleteNode(director.id, director.name)}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className={styles.addCoDirectorBtn ?? styles.addGGBtn}
+                    style={{ marginTop: 8 }}
+                    onClick={() => setIsAddDirectorOpen(true)}
+                    title="Adicionar um co-diretor para formar diretoria compartilhada"
+                  >
+                    + Adicionar Co-diretor
+                  </button>
+                </>
               ) : (
                 <div className={styles.directorsGrid}>
                   {directors.map(director => {
-                    const isShared = director.name.includes(' & ');
+                    const isCoDirector = directors.length > 1;
                     return (
                       <div
                         key={director.id}
@@ -418,7 +456,7 @@ export default function OrganogramaEditor() {
                         <Avatar photoUrl={director.photoUrl ?? ''} name={director.name} size={52} color={levelColors[0]} />
                         <div className={styles.directorText}>
                           <span className={styles.directorTag}>
-                            {isShared ? '👫 COMPARTILHADO' : 'CENTRAL'}
+                            {isCoDirector ? '👫 CO-DIRETOR' : 'CENTRAL'}
                           </span>
                           <span className={styles.directorName}>
                             {director.name || <em className={styles.noName}>Sem nome</em>}

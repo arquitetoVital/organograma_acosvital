@@ -91,3 +91,9 @@
 @media (prefers-reduced-motion: reduce) {
   .bone { animation: none; background: var(--border-subtle); }
 }
+
+@media (max-width: 767px) {
+  .header  { padding: 14px 16px 12px; }
+  .toolbar { padding: 10px 16px; }
+  .list    { padding: 10px 12px; }
+}

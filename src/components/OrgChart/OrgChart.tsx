@@ -3,6 +3,7 @@
 import CenterCard from "@/components/CenterCard/CenterCard";
 import NodeCard from "@/components/NodeCard/NodeCard";
 import SectorCard from "@/components/SectorCard/SectorCard";
+import { useFsMode } from "@/lib/fsContext";
 import { Connection, OrgNode, PositionedNode } from "@/types/orgChart";
 import {
   SECTOR_NODE_RADIUS,
@@ -11,7 +12,7 @@ import {
   calculateEvenSectorLayout,
   getSubtree,
 } from "@/utils/radialLayout";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import styles from "./OrgChart.module.css";
 import OrgTreeView from "./OrgTreeView";
 import Starfield from "./Starfield";
@@ -59,6 +60,8 @@ export default function OrgChart({
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const canvasTiltRef = useRef<HTMLDivElement>(null);
+  const lastCullSyncRef = useRef(0);
   const [mounted, setMounted] = useState(false);
   const [sectorStack, setSectorStack] = useState<string[]>([]);
   const activeSectorId =
@@ -78,7 +81,7 @@ export default function OrgChart({
     new Map(),
   );
   const lastPinchDist = useRef<number | null>(null);
-  const [cursor, setCursor] = useState<"grab" | "grabbing">("grab");
+  // cursor managed via DOM ref (no React state to avoid re-renders on every drag)
   // Touch extras
   const didDrag = useRef(false);
   const pointerDownPos = useRef({ x: 0, y: 0 });
@@ -100,9 +103,20 @@ export default function OrgChart({
   const minW = activeSectorId ? MIN_W_SC : MIN_W_OV;
   const maxW = activeSectorId ? MAX_W_SC : MAX_W_OV;
 
+  // setVb: atualiza a DOM diretamente (sem re-render React) durante pan/zoom.
+  // Estado React é sincronizado de forma throttled apenas para recálculo do culling.
   const setVb = useCallback((next: ViewBox) => {
     vbRef.current = next;
-    setVbState(next);
+    // Atualização direta da DOM — zero reconciliação React
+    if (svgRef.current) {
+      svgRef.current.setAttribute('viewBox', `${next.x} ${next.y} ${next.w} ${next.h}`);
+    }
+    // Sincroniza estado a ~7fps (apenas para recalcular visibleDetailOthers)
+    const now = performance.now();
+    if (now - lastCullSyncRef.current > 140) {
+      lastCullSyncRef.current = now;
+      setVbState(next);
+    }
   }, []);
 
   const animateTo = useCallback(
@@ -123,6 +137,7 @@ export default function OrgChart({
           animFrameRef.current = requestAnimationFrame(tick);
         } else {
           animFrameRef.current = null;
+          setVbState(target); // sincronização final para culling correto
         }
       };
       animFrameRef.current = requestAnimationFrame(tick);
@@ -533,7 +548,10 @@ export default function OrgChart({
 
     if (activePointers.current.size === 1) {
       isPanning.current = true;
-      setCursor("grabbing");
+      if (svgRef.current) {
+        svgRef.current.style.cursor = 'grabbing';
+        svgRef.current.classList.add(styles.panning);
+      }
       const cur = vbRef.current;
       panOrigin.current = {
         mouseX: e.clientX,
@@ -674,7 +692,10 @@ export default function OrgChart({
       lastPanEvent.current = null;
     } else if (remaining === 0) {
       isPanning.current = false;
-      setCursor("grab");
+      if (svgRef.current) {
+        svgRef.current.style.cursor = 'grab';
+        svgRef.current.classList.remove(styles.panning);
+      }
       lastPanEvent.current = null;
     }
   };
@@ -711,7 +732,7 @@ export default function OrgChart({
     }
   };
 
-  const vbStr = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
+  // viewBox gerenciado diretamente via DOM (não via React state) para máxima fluidez
 
   // ── Connection renderer ───────────────────────────────────────────────
   function renderConnections(
@@ -1252,10 +1273,20 @@ export default function OrgChart({
     setMounted(true);
   }, []);
 
-  // ── Tier 3: tilt 3D sutil seguindo o mouse ────────────────────────────
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  // Define o viewBox inicial via DOM assim que o SVG aparece na DOM.
+  // O React não gerencia mais este atributo — setVb cuida disso diretamente.
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    const v = vbRef.current;
+    svgRef.current?.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+  }, [mounted]);
 
-  // Tilt 3D: lê posição do mouse relativa ao wrapper e inclina o canvas
+  // Modo fullscreen: 'clean' oculta texto dos nós
+  const fsMode   = useFsMode();
+  const hideText = fsMode === 'clean';
+
+  // ── Tier 3: tilt 3D sutil seguindo o mouse ────────────────────────────
+  // Atualiza o transform diretamente no DOM — sem setState para evitar re-renders.
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -1263,12 +1294,17 @@ export default function OrgChart({
     if (!el) return;
     const MAX_DEG = 2.8;
     const onMove = (e: MouseEvent) => {
+      const tiltEl = canvasTiltRef.current;
+      if (!tiltEl) return;
       const rect = el.getBoundingClientRect();
       const nx = (e.clientX - rect.left - rect.width / 2) / (rect.width / 2);
       const ny = (e.clientY - rect.top - rect.height / 2) / (rect.height / 2);
-      setTilt({ x: ny * -MAX_DEG, y: nx * MAX_DEG });
+      tiltEl.style.transform = `perspective(1400px) rotateX(${ny * -MAX_DEG}deg) rotateY(${nx * MAX_DEG}deg)`;
     };
-    const onLeave = () => setTilt({ x: 0, y: 0 });
+    const onLeave = () => {
+      const tiltEl = canvasTiltRef.current;
+      if (tiltEl) tiltEl.style.transform = '';
+    };
     el.addEventListener("mousemove", onMove);
     el.addEventListener("mouseleave", onLeave);
     return () => {
@@ -1471,10 +1507,8 @@ export default function OrgChart({
 
           {/* ── Canvas inclinável: starfield + SVG ─────────────────────── */}
           <div
+            ref={canvasTiltRef}
             className={styles.canvasTilt}
-            style={{
-              transform: `perspective(1400px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
-            }}
           >
             <Starfield
               vbRef={vbRef}
@@ -1484,14 +1518,13 @@ export default function OrgChart({
             <svg
               ref={svgRef}
               className={styles.svg}
-              viewBox={vbStr}
               preserveAspectRatio="xMidYMid meet"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
               onContextMenu={(e) => e.preventDefault()}
-              style={{ cursor }}
+              style={{ cursor: 'grab' }}
             >
               <defs>
                 <radialGradient id="bg-grad" cx="50%" cy="50%" r="50%">
@@ -1603,6 +1636,7 @@ export default function OrgChart({
                       node={node}
                       color={levelColors[node.level] ?? "#fff"}
                       vbW={vb.w}
+                      hideText={hideText}
                     />
                   ))}
 
@@ -1613,13 +1647,22 @@ export default function OrgChart({
                       node={node}
                       color={node.sectorColor ?? levelColors[2]}
                       onClick={() => openSector(node.id)}
+                      hideText={hideText}
                     />
                   ))}
 
-                  {/* Directors center */}
-                  {overviewDirectors.map((d) => (
-                    <CenterCard key={d.id} node={d} color={levelColors[0]} />
-                  ))}
+                  {/* Directors center — múltiplos level-0 são mesclados num único card pareado */}
+                  {overviewDirectors.length === 1 && (
+                    <CenterCard node={overviewDirectors[0]} color={levelColors[0]} hideText={hideText} />
+                  )}
+                  {overviewDirectors.length > 1 && (() => {
+                    const merged: typeof overviewDirectors[0] = {
+                      ...overviewDirectors[0],
+                      name: overviewDirectors.map(d => d.name).join(' & '),
+                      photoUrl: overviewDirectors.find(d => d.photoUrl)?.photoUrl,
+                    };
+                    return <CenterCard node={merged} color={levelColors[0]} hideText={hideText} />;
+                  })()}
                 </g>
               )}
 
@@ -1659,7 +1702,7 @@ export default function OrgChart({
                             />
                           </>
                         )}
-                        <NodeCard node={node} color={color} vbW={vb.w} />
+                        <NodeCard node={node} color={color} vbW={vb.w} hideText={hideText} />
                       </g>
                     );
                   })}
@@ -1671,6 +1714,7 @@ export default function OrgChart({
                       node={node}
                       color={node.sectorColor ?? levelColors[3]}
                       onClick={() => openSector(node.id)}
+                      hideText={hideText}
                     />
                   ))}
 
@@ -1679,6 +1723,7 @@ export default function OrgChart({
                     node={detailCenter}
                     color={detailCenter.sectorColor ?? levelColors[2]}
                     onClick={() => {}}
+                    hideText={hideText}
                   />
                 </g>
               )}

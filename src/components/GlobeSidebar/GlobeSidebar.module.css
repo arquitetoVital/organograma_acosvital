@@ -147,3 +147,47 @@
   transform: translateX(0);
   pointer-events: auto;
 }
+
+/* ── Mobile: drawer cobre tela cheia, panel vira bottom sheet ──────────── */
+@media (max-width: 767px) {
+  .mainToggle {
+    bottom: 20px;
+    right: 16px;
+    height: 40px;
+    padding: 0 14px 0 12px;
+    font-size: 12px;
+  }
+
+  /* Drawer: largura e altura já respeitam 100vw / 100vh */
+  .drawer { width: 100vw; }
+
+  /* Panel de lista: bottom sheet */
+  .panel {
+    width: 100%;
+    height: 55%;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 20px 20px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .panelOpen {
+    transform: translateY(0);
+  }
+
+  /* Toggle reposicionado para não sobrepor o panel */
+  .panelToggle {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .panelToggleOpen {
+    right: 20px;
+    bottom: calc(55% + 14px);
+  }
+}

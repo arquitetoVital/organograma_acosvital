@@ -4,6 +4,8 @@ import styles from './CenterCard.module.css';
 interface Props {
   node: PositionedNode;
   color: string;
+  /** Oculta labels de nome/cargo (modo fullscreen limpo) */
+  hideText?: boolean;
 }
 
 const CR   = 75;  // single director: circle radius
@@ -36,7 +38,7 @@ function splitName(name: string): [string, string | null] {
   return [words.slice(0, mid).join(' '), words.slice(mid).join(' ') || null];
 }
 
-export default function CenterCard({ node, color }: Props) {
+export default function CenterCard({ node, color, hideText = false }: Props) {
   // ── Modo duplo: nome com " & " indica co-diretores (mesma foto para ambos) ─
   const nameParts = node.name.split(/\s+&\s+/);
   const isPaired  = nameParts.length >= 2;
@@ -91,15 +93,16 @@ export default function CenterCard({ node, color }: Props) {
             clipPath="url(#clip-center)" preserveAspectRatio="xMidYMid slice" />
         )}
 
-        {/* Role label */}
-        <text x={0} y={CR + 20} textAnchor="middle" fill={color} fontSize={9} fontWeight="700" letterSpacing="2" fontFamily={FONT} opacity={0.9}>
-          {node.role.toUpperCase()}
-        </text>
-
-        {/* Nome combinado: "Joanes S. & Amanda V." */}
-        <text x={0} y={CR + 38} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={11} fontWeight="700" fontFamily={FONT}>
-          {label}
-        </text>
+        {!hideText && (
+          <>
+            <text x={0} y={CR + 20} textAnchor="middle" fill={color} fontSize={9} fontWeight="700" letterSpacing="2" fontFamily={FONT} opacity={0.9}>
+              {node.role.toUpperCase()}
+            </text>
+            <text x={0} y={CR + 38} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={11} fontWeight="700" fontFamily={FONT}>
+              {label}
+            </text>
+          </>
+        )}
       </g>
     );
   }
@@ -145,21 +148,20 @@ export default function CenterCard({ node, color }: Props) {
           clipPath="url(#clip-center)" preserveAspectRatio="xMidYMid slice" />
       )}
 
-      {/* Role label */}
-      <text x={0} y={CR + 20} textAnchor="middle" fill={color} fontSize={9} fontWeight="700" letterSpacing="2" fontFamily={FONT} opacity={0.9}>
-        {node.role.toUpperCase()}
-      </text>
-
-      {/* Name line 1 */}
-      <text x={0} y={CR + 38} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={12} fontWeight="700" fontFamily={FONT}>
-        {nameLine1}
-      </text>
-
-      {/* Name line 2 */}
-      {nameLine2 && (
-        <text x={0} y={CR + 54} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={12} fontWeight="700" fontFamily={FONT}>
-          {nameLine2}
-        </text>
+      {!hideText && (
+        <>
+          <text x={0} y={CR + 20} textAnchor="middle" fill={color} fontSize={9} fontWeight="700" letterSpacing="2" fontFamily={FONT} opacity={0.9}>
+            {node.role.toUpperCase()}
+          </text>
+          <text x={0} y={CR + 38} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={12} fontWeight="700" fontFamily={FONT}>
+            {nameLine1}
+          </text>
+          {nameLine2 && (
+            <text x={0} y={CR + 54} textAnchor="middle" style={{ fill: 'var(--text-primary)' }} fontSize={12} fontWeight="700" fontFamily={FONT}>
+              {nameLine2}
+            </text>
+          )}
+        </>
       )}
     </g>
   );
