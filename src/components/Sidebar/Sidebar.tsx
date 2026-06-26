@@ -68,6 +68,16 @@ function IconFullscreen({ exit }: { exit: boolean }) {
     </svg>
   );
 }
+function IconTv() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/>
+      <path d="M8 3l4 4 4-4"/>
+      <line x1="9" y1="21" x2="15" y2="21"/>
+      <line x1="12" y1="18" x2="12" y2="21"/>
+    </svg>
+  );
+}
 function IconChevron({ collapsed }: { collapsed: boolean }) {
   return (
     <svg
@@ -99,33 +109,37 @@ const ADMIN_SUB = [
 interface Props {
   isAdmin: boolean;
   userEmail?: string;
-  /** Em tela cheia o sidebar flutua sobre o conteúdo */
+  /** Em tela cheia TV o sidebar flutua sobre o conteúdo */
   floating?: boolean;
+  /** True quando o modo TV está ativo */
+  isTvFs?: boolean;
+  /** True quando qualquer modo fullscreen está ativo */
+  isAnyFs?: boolean;
+  /** Entra/sai do modo TV (sidebar flutuante) */
+  onTvFs?: () => void;
+  /** Entra/sai do modo fullscreen limpo (sidebar oculta) */
+  onCleanFs?: () => void;
+  /** Mobile: drawer aberto */
+  mobileOpen?: boolean;
+  /** Mobile: callback para fechar o drawer */
+  onMobileClose?: () => void;
 }
 
-export default function Sidebar({ isAdmin, userEmail, floating = false }: Props) {
+export default function Sidebar({
+  isAdmin, userEmail,
+  floating = false,
+  isTvFs = false, isAnyFs = false,
+  onTvFs, onCleanFs,
+  mobileOpen = false, onMobileClose,
+}: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [isFs, setIsFs]           = useState(false);
   const [pending, setPending]     = useState(false);
 
-  useEffect(() => {
-    const onChange = () => setIsFs(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-
-  // Ao entrar em tela cheia: colapsa automaticamente para ocupar menos espaço
+  // Ao entrar em modo TV: colapsa automaticamente para ocupar menos espaço
   useEffect(() => {
     if (floating) setCollapsed(true);
   }, [floating]);
-
-  const toggleFs = useCallback(async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-    } catch {}
-  }, []);
 
   async function handleSignOut() {
     setPending(true);
@@ -137,8 +151,9 @@ export default function Sidebar({ isAdmin, userEmail, floating = false }: Props)
 
   const cls = [
     styles.sidebar,
-    collapsed ? styles.collapsed : '',
-    floating  ? styles.floating  : '',
+    collapsed   ? styles.collapsed   : '',
+    floating    ? styles.floating    : '',
+    mobileOpen  ? styles.mobileOpen  : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -176,6 +191,7 @@ export default function Sidebar({ isAdmin, userEmail, floating = false }: Props)
                   href={href}
                   className={`${styles.navItem} ${active ? styles.active : ''}`}
                   title={collapsed ? label : undefined}
+                  onClick={onMobileClose}
                 >
                   {active && <span className={styles.activePip} />}
                   <span className={styles.navIcon}><Icon /></span>
@@ -197,6 +213,7 @@ export default function Sidebar({ isAdmin, userEmail, floating = false }: Props)
             href="/admin"
             className={`${styles.navItem} ${pathname.startsWith('/admin') ? styles.active : ''}`}
             title={collapsed ? 'Administrar' : undefined}
+            onClick={onMobileClose}
           >
             {pathname.startsWith('/admin') && <span className={styles.activePip} />}
             <span className={styles.navIcon}><IconSettings /></span>
@@ -210,6 +227,7 @@ export default function Sidebar({ isAdmin, userEmail, floating = false }: Props)
                   <Link
                     href={href}
                     className={`${styles.subNavItem} ${pathname === href ? styles.subNavActive : ''}`}
+                    onClick={onMobileClose}
                   >
                     {label}
                   </Link>
@@ -224,15 +242,33 @@ export default function Sidebar({ isAdmin, userEmail, floating = false }: Props)
       <div className={styles.footer}>
         <div className={styles.footerActions}>
           <ThemeToggle className={styles.footerBtn} />
+
+          {/* Tela cheia limpa — sem sidebar */}
           <button
-            onClick={toggleFs}
+            onClick={onCleanFs}
             className={styles.footerBtn}
-            title={isFs ? 'Sair da tela cheia' : 'Tela cheia'}
+            title={isAnyFs && !isTvFs ? 'Sair da tela cheia' : 'Tela cheia'}
           >
-            <IconFullscreen exit={isFs} />
-            <span>{isFs ? 'Sair da tela cheia' : 'Tela cheia'}</span>
+            <IconFullscreen exit={isAnyFs && !isTvFs} />
+            <span>{isAnyFs && !isTvFs ? 'Sair da tela cheia' : 'Tela cheia'}</span>
           </button>
         </div>
+
+        {/* Card Modo TV */}
+        <button
+          onClick={onTvFs}
+          className={`${styles.tvCard} ${isTvFs ? styles.tvCardActive : ''}`}
+          title={isTvFs ? 'Sair do Modo TV' : 'Modo TV — apresentação na televisão'}
+        >
+          <span className={styles.tvCardIcon}>
+            <IconTv />
+          </span>
+          <span className={styles.tvCardBody}>
+            <span className={styles.tvCardTitle}>Modo TV</span>
+            <span className={styles.tvCardSub}>Apresentação na televisão</span>
+          </span>
+          {isTvFs && <span className={styles.tvCardBadge}>Ativo</span>}
+        </button>
 
         <div className={styles.footerDivider} />
 

@@ -171,6 +171,7 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
   const [tooltip, setTooltip]   = useState<{ x: number; y: number; count: number; city: string } | null>(null);
   const biomeGroupsRef = useRef<{ fill: string; features: GeoPermissibleObjects[] }[]>([]);
   const nightCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const nightPathRef   = useRef<GeoPath | null>(null);
 
   useEffect(() => { pointsRef.current = points; }, [points]);
   useEffect(() => { focusedIdRef.current = focusedId ?? null; }, [focusedId]);
@@ -506,7 +507,9 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
         const nctx = nc.getContext('2d')!;
         nctx.clearRect(0, 0, nc.width, nc.height);
 
-        const nPath = d3geo.geoPath().projection(proj).context(nctx);
+        // Reutiliza o geoPath em vez de criar novo objeto a cada frame
+        if (!nightPathRef.current) nightPathRef.current = d3geo.geoPath().projection(proj);
+        const nPath = nightPathRef.current.context(nctx);
         nctx.beginPath();
         nPath(gc.radius(98)() as unknown as GeoPermissibleObjects);
         nctx.fillStyle = 'rgba(0,3,15,0.28)'; nctx.fill();

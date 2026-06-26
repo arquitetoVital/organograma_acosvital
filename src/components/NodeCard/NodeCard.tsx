@@ -7,6 +7,8 @@ interface Props {
   color: string;
   /** Current viewBox width — used to compute apparent on-screen radius for LOD */
   vbW: number;
+  /** Oculta labels de texto (modo fullscreen limpo) */
+  hideText?: boolean;
 }
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
@@ -30,11 +32,11 @@ function screenR(svgR: number, vbW: number): number {
   return svgR * (900 / vbW);
 }
 
-function NodeCardInner({ node, color, vbW }: Props) {
+function NodeCardInner({ node, color, vbW, hideText = false }: Props) {
   const r = node.radius;
   const sr = screenR(r, vbW);
   const showImage = sr >= 9 && !!node.photoUrl;
-  const showLabel = sr >= 13;
+  const showLabel = sr >= 13 && !hideText;
   const clipId = `clip-${node.id}`;
   const fontSize = r <= 13 ? 8 : r <= 20 ? 9 : 10;
 
@@ -99,6 +101,7 @@ function NodeCardInner({ node, color, vbW }: Props) {
 
 function propsAreEqual(prev: Props, next: Props): boolean {
   if (prev.node !== next.node || prev.color !== next.color) return false;
+  if (prev.hideText !== next.hideText) return false;
   const prevSR = screenR(prev.node.radius, prev.vbW);
   const nextSR = screenR(next.node.radius, next.vbW);
   return (prevSR >= 9) === (nextSR >= 9) && (prevSR >= 13) === (nextSR >= 13);

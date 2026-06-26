@@ -1,9 +1,10 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import styles from './SidebarShell.module.css';
+import { FsContext } from '@/lib/fsContext';
 
 interface Props {
   isAdmin: boolean;
@@ -13,24 +14,124 @@ interface Props {
 
 const HIDDEN_PATHS = ['/login'];
 
+function IconExitFs() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+      <path d="M5 1H2v3M10 1h3v3M13 10v3h-3M5 14H2v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export default function SidebarShell({ isAdmin, userEmail, children }: Props) {
   const pathname = usePathname();
-  const [isFs, setIsFs] = useState(false);
 
+  /** 'none' | 'tv' (sidebar flutuante) | 'clean' (sidebar oculta) */
+  const [fsMode, setFsMode] = useState<'none' | 'tv' | 'clean'>('none');
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Reset quando o usuário sai do fullscreen pelo Esc / API do browser
   useEffect(() => {
-    const onChange = () => setIsFs(!!document.fullscreenElement);
+    const onChange = () => {
+      if (!document.fullscreenElement) setFsMode('none');
+    };
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
+  // Fecha sidebar mobile ao mudar de rota
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  const enterTvFs = useCallback(async () => {
+    try {
+      if (fsMode === 'tv') {
+        await document.exitFullscreen();
+        setFsMode('none');
+      } else {
+        if (!document.fullscreenElement)
+          await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        setFsMode('tv');
+      }
+    } catch {}
+  }, [fsMode]);
+
+  const enterCleanFs = useCallback(async () => {
+    try {
+      if (fsMode === 'clean') {
+        await document.exitFullscreen();
+        setFsMode('none');
+      } else {
+        if (!document.fullscreenElement)
+          await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        setFsMode('clean');
+      }
+    } catch {}
+  }, [fsMode]);
+
+  const exitFs = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+    } catch {}
+  }, []);
+
   const showSidebar = !HIDDEN_PATHS.some(p => pathname.startsWith(p));
 
-  if (!showSidebar) return <>{children}</>;
+  if (!showSidebar) return <FsContext.Provider value={fsMode}>{children}</FsContext.Provider>;
+
+  // Modo TV e modo limpo: sidebar completamente oculta, conteúdo fullscreen
+  if (fsMode === 'tv' || fsMode === 'clean') {
+    return (
+      <FsContext.Provider value={fsMode}>
+      <div className={styles.shell}>
+        <div className={styles.content}>{children}</div>
+      </div>
+      </FsContext.Provider>
+    );
+  }
 
   return (
+    <FsContext.Provider value={fsMode}>
     <div className={styles.shell}>
-      <Sidebar isAdmin={isAdmin} userEmail={userEmail} floating={isFs} />
+      {/* Backdrop — cobre o conteúdo quando sidebar mobile está aberta */}
+      {mobileOpen && (
+        <div
+          className={styles.backdrop}
+          onClick={closeMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Botão hamburguer — só visível em mobile */}
+      <button
+        className={`${styles.menuBtn} ${mobileOpen ? styles.menuBtnOpen : ''}`}
+        onClick={() => setMobileOpen(o => !o)}
+        aria-label={mobileOpen ? 'Fechar menu' : 'Abrir menu'}
+      >
+        {mobileOpen ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        )}
+      </button>
+
+      <Sidebar
+        isAdmin={isAdmin}
+        userEmail={userEmail}
+        floating={false}
+        isTvFs={false}
+        isAnyFs={false}
+        onTvFs={enterTvFs}
+        onCleanFs={enterCleanFs}
+        mobileOpen={mobileOpen}
+        onMobileClose={closeMobile}
+      />
       <div className={styles.content}>{children}</div>
     </div>
+    </FsContext.Provider>
   );
 }

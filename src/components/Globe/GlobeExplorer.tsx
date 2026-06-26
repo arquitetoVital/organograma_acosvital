@@ -6,6 +6,7 @@ import GlobePanel, { type RegionFilter } from '@/components/Globe/GlobePanel';
 import { type ClientPoint, toGlobePoint } from '@/types/client';
 import { regionFromAddress, type RegionKey } from '@/lib/regions';
 import { LOGO_URL } from '@/lib/constants';
+import { useFsMode } from '@/lib/fsContext';
 import styles from './GlobeExplorer.module.css';
 
 interface Props {
@@ -27,16 +28,22 @@ interface Props {
 export default function GlobeExplorer({ points, theme, loading, itemLabel, loadingText, readOnly = false, loadDetail }: Props) {
   const [region, setRegion]   = useState<RegionFilter>('ALL');
   const [query, setQuery]     = useState('');
-  const [panelOpen, setPanel] = useState(true);
+  const [panelOpen, setPanel] = useState(false);
   const [focus, setFocus]     = useState<{ lat: number; lon: number; nonce: number } | null>(null);
   const [selected, setSelected] = useState<ClientPoint | null>(null);
   const [isFs, setIsFs]       = useState(false);
+  const fsMode = useFsMode();
 
   useEffect(() => {
     const onChange = () => setIsFs(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
+
+  // Modo TV: abre o painel automaticamente para mostrar os textos
+  useEffect(() => {
+    if (fsMode === 'tv') setPanel(true);
+  }, [fsMode]);
 
   const accent = theme === 'vital' ? '#ef4444' : '#f97316';
 

@@ -5,6 +5,8 @@ interface Props {
   node: PositionedNode;
   color: string;
   onClick: () => void;
+  /** Oculta labels de nome (modo fullscreen limpo) */
+  hideText?: boolean;
 }
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
@@ -25,7 +27,7 @@ function splitLine(name: string): [string, string | null] {
   return [l1, l2 || null];
 }
 
-export default function SectorCard({ node, color, onClick }: Props) {
+export default function SectorCard({ node, color, onClick, hideText = false }: Props) {
   const r = node.radius;
   const [line1, line2] = splitLine(node.name);
 
@@ -88,43 +90,47 @@ export default function SectorCard({ node, color, onClick }: Props) {
         {abbrev(node.name)}
       </text>
 
-      {/* Sector name — line 1 */}
-      <text
-        x={0} y={r + 16}
-        textAnchor="middle"
-        style={{ fill: 'var(--text-primary)' }}
-        fontSize={10}
-        fontWeight="700"
-        fontFamily={FONT}
-      >
-        {line1}
-      </text>
+      {!hideText && (
+        <>
+          {/* Sector name — line 1 */}
+          <text
+            x={0} y={r + 16}
+            textAnchor="middle"
+            style={{ fill: 'var(--text-primary)' }}
+            fontSize={10}
+            fontWeight="700"
+            fontFamily={FONT}
+          >
+            {line1}
+          </text>
 
-      {/* Sector name — line 2 */}
-      {line2 && (
-        <text
-          x={0} y={r + 29}
-          textAnchor="middle"
-          style={{ fill: 'var(--text-primary)' }}
-          fontSize={10}
-          fontWeight="700"
-          fontFamily={FONT}
-        >
-          {line2}
-        </text>
+          {/* Sector name — line 2 */}
+          {line2 && (
+            <text
+              x={0} y={r + 29}
+              textAnchor="middle"
+              style={{ fill: 'var(--text-primary)' }}
+              fontSize={10}
+              fontWeight="700"
+              fontFamily={FONT}
+            >
+              {line2}
+            </text>
+          )}
+
+          {/* "ver equipe" hint */}
+          <text
+            x={0} y={r + (line2 ? 43 : 30)}
+            textAnchor="middle"
+            fill={color}
+            fontSize={8}
+            fontFamily={FONT}
+            opacity={0.6}
+          >
+            ver equipe
+          </text>
+        </>
       )}
-
-      {/* "▶" expand hint */}
-      <text
-        x={0} y={r + (line2 ? 43 : 30)}
-        textAnchor="middle"
-        fill={color}
-        fontSize={8}
-        fontFamily={FONT}
-        opacity={0.6}
-      >
-        ver equipe
-      </text>
     </g>
   );
 }

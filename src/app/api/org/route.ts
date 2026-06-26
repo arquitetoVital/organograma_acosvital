@@ -27,9 +27,9 @@ function toOrgNode(n: VwNode): OrgNode {
     id:               n.id,
     name:             n.name          ?? '',
     role:             n.role          ?? '',
-    level:            n.level,
+    level:            Number(n.level),  // garante número mesmo se a API retornar string
     parentId:         n.parent_id     ?? null,
-    isSector:         n.is_sector     ?? false,
+    isSector:         Boolean(n.is_sector),
     photoUrl:         n.photo_url     ?? undefined,
     sectorColor:      n.sector_color  ?? undefined,
     sectorDirectorOf: n.sector_director_of ?? null,

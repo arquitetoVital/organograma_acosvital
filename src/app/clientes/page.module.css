@@ -100,3 +100,39 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
 }
+
+/* ── Mobile: panel vira bottom sheet ───────────────────────────────────── */
+@media (max-width: 767px) {
+  .page { flex-direction: column; }
+
+  .globeArea { width: 100%; height: 100%; }
+
+  .panel {
+    width: 100%;
+    height: 60%;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    border-radius: 20px 20px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .panelOpen {
+    transform: translateY(0);
+    position: fixed;
+  }
+
+  .panelToggle {
+    bottom: 18px;
+    right: 18px;
+  }
+
+  .panelToggleShifted {
+    right: 18px;
+    bottom: calc(60% + 14px);
+  }
+}

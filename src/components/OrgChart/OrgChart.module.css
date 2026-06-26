@@ -479,9 +479,15 @@
 .flowLine {
   stroke-dasharray: 2.5 12;
   animation: flowDash 1.1s linear infinite;
+  will-change: stroke-dashoffset;
 }
 @keyframes flowDash {
   to { stroke-dashoffset: -29; }
+}
+
+/* Pausa animações durante o arraste para liberar o compositor */
+.panning .flowLine {
+  animation-play-state: paused;
 }
 
 /* ── Destaque "voar até" ─────────────────────────────────────────────── */
