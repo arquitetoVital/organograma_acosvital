@@ -8,6 +8,7 @@ import AddSectorModal, { AddSubSectorModal } from '@/components/Admin/modals/Add
 import DirectorModal    from '@/components/Admin/modals/DirectorModal';
 import CreateManagerModal from '@/components/Admin/modals/CreateManagerModal';
 import { deleteOrgNode, updateOrgNode } from '@/lib/orgApi';
+import { cachedFetch, invalidateCache, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 import { countSectorMembers } from '@/lib/nodeUtils';
 import { useToast }         from '@/hooks/useToast';
 import { useSyncIds }       from '@/hooks/useSyncIds';
@@ -54,7 +55,9 @@ const IMPORT_RESUME_WINDOW_MS = 15 * 60 * 1000;
 export default function OrganogramaEditor() {
   // ── Dados ────────────────────────────────────────────────────────────────
   const [nodes,       setNodes]       = useState<OrgNode[]>([]);
-  const [isLoading,   setIsLoading]   = useState(true);
+  const [isLoading,   setIsLoading]   = useState(
+    () => !isCacheHit(CACHE_KEYS.ORG, CACHE_TTL.ORG),
+  );
   const [isImporting, setIsImporting] = useState(false);
   const importAbortRef = useRef<AbortController | null>(null);
 
@@ -170,13 +173,18 @@ export default function OrganogramaEditor() {
   }, [openSectorId, nodes, nodeMap]);
 
   // ── Busca de dados ───────────────────────────────────────────────────────
-  const refreshNodes = useCallback(async () => {
+  // forceRefresh=true é usado após mutações (delete, import) para bypassar cache
+  const refreshNodes = useCallback(async (forceRefresh = false) => {
+    const key = CACHE_KEYS.ORG;
+    const ttl = CACHE_TTL.ORG;
+    if (forceRefresh) invalidateCache(key);
     try {
-      const res = await fetch('/api/org');
-      if (res.ok) {
-        const data: unknown = await res.json();
-        setNodes(Array.isArray(data) ? data as OrgNode[] : []);
-      }
+      const data = await cachedFetch<OrgNode[]>(
+        key,
+        () => fetch('/api/org').then(r => r.json()),
+        ttl,
+      );
+      setNodes(Array.isArray(data) ? data : []);
     } finally {
       setIsLoading(false);
     }
@@ -214,7 +222,7 @@ export default function OrganogramaEditor() {
           await deleteOrgNode(nodeId);
           // Fecha o drawer se o setor excluído estava aberto
           if (openSectorId === nodeId) setOpenSectorId(null);
-          await refreshNodes();
+          await refreshNodes(true);
           showToast('Excluído com sucesso.');
         } catch (err) {
           showToast(err instanceof Error ? err.message : 'Erro ao excluir.', 'error');
@@ -268,7 +276,7 @@ export default function OrganogramaEditor() {
         return;
       }
       const result = data as { created: number; updated: number; skipped: number; orphans: number; diagnostics: { funcionarios: number; cargos: number; setores: number } };
-      await refreshNodes();
+      await refreshNodes(true);
       const d = result.diagnostics;
       const orphanNote = result.orphans > 0 ? ` (${result.orphans} sem setor)` : '';
       showToast(

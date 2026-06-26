@@ -7,6 +7,7 @@ import {
   OVERVIEW_RING_RADII, OVERVIEW_NODE_RADIUS,
 } from '@/utils/radialLayout';
 import type { OrgNode } from '@/types/orgChart';
+import { cachedFetch, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 const syncDotStyle: React.CSSProperties = {
   position: 'absolute',
@@ -31,12 +32,12 @@ const syncDotStyle: React.CSSProperties = {
 };
 
 interface Props {
-  initialNodes: OrgNode[];
+  initialNodes?: OrgNode[];
   levelColors: Record<number, string>;
   levelNames: Record<number, string>;
 }
 
-export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, levelNames }: Props) {
+export default function OrgChartRealtimeWrapper({ initialNodes = [], levelColors, levelNames }: Props) {
   const [nodes, setNodes]         = useState<OrgNode[]>(initialNodes);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -52,23 +53,23 @@ export default function OrgChartRealtimeWrapper({ initialNodes, levelColors, lev
   );
   const connections = useMemo(() => calculateConnections(positions), [positions]);
 
-  async function loadFreshNodes() {
-    setIsSyncing(true);
-    try {
-      const res = await fetch('/api/org');
-      if (res.ok) {
-        const data: unknown = await res.json();
-        if (Array.isArray(data)) setNodes(data as OrgNode[]);
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  }
-
-  // Busca dados frescos ao montar — captura mudanças feitas em outras páginas
+  // Busca dados frescos ao montar — usa cache se < 5 min (evita refetch em toda navegação)
   useEffect(() => {
     let active = true;
-    loadFreshNodes().catch(() => { if (active) setIsSyncing(false); });
+    const key = CACHE_KEYS.ORG;
+    const ttl = CACHE_TTL.ORG;
+
+    if (!isCacheHit(key, ttl)) setIsSyncing(true);
+
+    cachedFetch<OrgNode[]>(
+      key,
+      () => fetch('/api/org').then(r => r.json()),
+      ttl,
+    )
+      .then(data => { if (active && Array.isArray(data)) setNodes(data); })
+      .catch(() => {})
+      .finally(() => { if (active) setIsSyncing(false); });
+
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

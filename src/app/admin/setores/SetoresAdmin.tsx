@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Setor } from '@/types/adminCore';
 import { IcoEdit, IcoTrash, IcoSearch, IcoEmpty } from '../_icons';
 import styles from '../crud.module.css';
+import { cachedFetch, invalidateCache, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 const PALETTE = [
   '#3b82f6','#8b5cf6','#ec4899','#ef4444','#f97316',
@@ -29,7 +30,9 @@ function buildTree(setores: Setor[]): Setor[] {
 
 export default function SetoresAdmin() {
   const [setores,  setSetores]  = useState<Setor[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [loading,  setLoading]  = useState(
+    () => !isCacheHit(CACHE_KEYS.ADMIN_SETORES, CACHE_TTL.ADMIN),
+  );
   const [search,   setSearch]   = useState('');
   const [filter,   setFilter]   = useState<'todos' | 'ativos' | 'inativos'>('ativos');
   const [form,     setForm]     = useState<SetorForm>(BLANK);
@@ -43,10 +46,17 @@ export default function SetoresAdmin() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) invalidateCache(CACHE_KEYS.ADMIN_SETORES);
     setLoading(true);
-    const res = await fetch('/api/admin/setores');
-    if (res.ok) setSetores(await res.json());
+    try {
+      const data = await cachedFetch<Setor[]>(
+        CACHE_KEYS.ADMIN_SETORES,
+        () => fetch('/api/admin/setores').then(r => r.json()),
+        CACHE_TTL.ADMIN,
+      );
+      setSetores(data);
+    } catch {}
     setLoading(false);
   }, []);
 
@@ -111,7 +121,7 @@ export default function SetoresAdmin() {
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
       showToast(editing ? 'Setor atualizado.' : 'Setor criado.');
       cancelEdit();
-      await load();
+      await load(true);
     } finally { setSaving(false); }
   }
 
@@ -122,7 +132,7 @@ export default function SetoresAdmin() {
     if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', true); return; }
     showToast('Setor removido.');
     if (editing?.id === s.id) cancelEdit();
-    await load();
+    await load(true);
   }
 
   return (

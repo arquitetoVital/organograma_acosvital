@@ -1,21 +1,12 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobeCanvas, { DotGroup } from '@/components/Globe/GlobeCanvas';
 import VitalPanel from '@/components/Vital/VitalPanel';
 import ClientModal from '@/components/Vital/ClientModal';
-import { ClientPoint, OmieClient, fromOmie, toGlobePoint } from '@/types/client';
+import { ClientPoint, ApiCliente, toClientPoint, toGlobePoint } from '@/types/client';
+import { cachedFetch, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 import styles from './GlobeSidebar.module.css';
-
-const STORAGE_KEY = 'vital-clients-v2';
-
-function loadFromStorage(): ClientPoint[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as ClientPoint[];
-  } catch {}
-  return [];
-}
 
 interface Props {
   isAdmin: boolean;
@@ -27,37 +18,27 @@ export default function GlobeSidebar({ isAdmin }: Props) {
   const [clients,      setClients]      = useState<ClientPoint[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [modalClients, setModalClients] = useState<ClientPoint[] | null>(null);
-  const mountedRef = useRef(false);
 
   const globePoints = useMemo(() => clients.map(toGlobePoint), [clients]);
 
-  // Carrega do localStorage e mescla com clients.json
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-
-    const stored = loadFromStorage();
-    if (stored.length > 0) setClients(stored);
-
-    setLoading(true);
-    fetch('/data/clients.json')
-      .then(r => r.ok ? r.json() as Promise<OmieClient[]> : Promise.reject())
-      .then(data => {
-        setClients(prev => {
-          const existingIds = new Set(prev.map(c => c.id));
-          const newOnes = data.map(fromOmie).filter(c => !existingIds.has(c.id));
-          return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-        });
+    let cancelled = false;
+    cachedFetch<{ clientes: ApiCliente[] }>(
+      CACHE_KEYS.CLIENTES,
+      () => fetch('/api/clientes-mapa').then(r => r.json()),
+      CACHE_TTL.LONG,
+    )
+      .then(json => {
+        if (cancelled) return;
+        const pts = (json.clientes ?? [])
+          .filter(c => c.latitude_y != null && c.longitude_x != null)
+          .map(c => toClientPoint(c, Number(c.latitude_y), Number(c.longitude_x)));
+        setClients(pts);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
-
-  // Persiste no localStorage
-  useEffect(() => {
-    if (!mountedRef.current) return;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(clients)); } catch {}
-  }, [clients]);
 
   // Clique num ponto do globo → abre modal
   const handlePointClick = useCallback((group: DotGroup) => {
@@ -67,22 +48,6 @@ export default function GlobeSidebar({ isAdmin }: Props) {
     if (clicked.length > 0) setModalClients(clicked);
   }, [clients]);
 
-  const addClient = useCallback((lat: number, lon: number, nome: string, endereco: string) => {
-    const id = Date.now();
-    setClients(prev => [...prev, {
-      id, codigo_omie: id,
-      nome: nome.trim() || `Cliente ${prev.length + 1}`,
-      endereco: endereco.trim(), lat, lon, source: 'manual',
-    }]);
-  }, []);
-
-  const removeClient = useCallback((id: number) => {
-    setClients(prev => prev.filter(c => c.id !== id));
-  }, []);
-
-  const updateClient = useCallback((id: number, lat: number, lon: number, nome: string, endereco: string) => {
-    setClients(prev => prev.map(c => c.id === id ? { ...c, lat, lon, nome, endereco } : c));
-  }, []);
 
   return (
     <>
@@ -141,9 +106,9 @@ export default function GlobeSidebar({ isAdmin }: Props) {
             <VitalPanel
               clients={clients}
               isAdmin={isAdmin}
-              onAdd={addClient}
-              onRemove={removeClient}
-              onUpdate={updateClient}
+              onAdd={() => {}}
+              onRemove={() => {}}
+              onUpdate={() => {}}
             />
           </div>
         </div>

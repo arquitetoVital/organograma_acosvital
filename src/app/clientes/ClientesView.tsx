@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import GlobeExplorer from '@/components/Globe/GlobeExplorer';
 import type { ApiCliente, ClientPoint } from '@/types/client';
 import { toClientPoint } from '@/types/client';
+import { cachedFetch, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 function buildPoints(clientes: ApiCliente[]): ClientPoint[] {
   return clientes
@@ -17,16 +18,20 @@ interface ClientesViewProps {
 
 export default function ClientesView({ canViewDetails = false }: ClientesViewProps) {
   const [points,  setPoints]  = useState<ClientPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Sem spinner se cache estiver quente — dado aparece instantaneamente
+  const [loading, setLoading] = useState(
+    () => !isCacheHit(CACHE_KEYS.CLIENTES, CACHE_TTL.LONG),
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/clientes-mapa')
-      .then(r => r.json())
-      .then((json: { clientes: ApiCliente[] }) => {
-        if (!cancelled) setPoints(buildPoints(json.clientes ?? []));
-      })
+    cachedFetch<{ clientes: ApiCliente[] }>(
+      CACHE_KEYS.CLIENTES,
+      () => fetch('/api/clientes-mapa').then(r => r.json()),
+      CACHE_TTL.LONG,
+    )
+      .then(json => { if (!cancelled) setPoints(buildPoints(json.clientes ?? [])); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
 

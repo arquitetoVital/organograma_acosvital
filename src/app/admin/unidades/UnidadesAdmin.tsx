@@ -223,7 +223,15 @@ export default function UnidadesAdmin() {
           </div>
 
           <div className={styles.list}>
-            {loading && <div className={styles.loadingState}>Carregando…</div>}
+            {loading && Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className={styles.row}>
+                <span className={styles.skeleton} style={{ width: 8, height: 8, borderRadius: '50%' }} />
+                <div className={styles.rowBody}>
+                  <span className={styles.skeleton} style={{ width: '55%', height: 13, marginBottom: 5 }} />
+                  <span className={styles.skeleton} style={{ width: '40%', height: 10 }} />
+                </div>
+              </div>
+            ))}
             {!loading && filtered.length === 0 && (
               <div className={styles.emptyState}>
                 {search ? 'Nenhum resultado.' : 'Nenhuma unidade ainda.'}

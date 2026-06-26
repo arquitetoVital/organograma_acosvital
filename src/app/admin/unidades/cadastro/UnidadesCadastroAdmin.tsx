@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Unidade } from '@/types/adminCore';
 import { IcoEdit, IcoTrash, IcoSearch, IcoEmpty } from '../../_icons';
 import styles from '../../crud.module.css';
+import { cachedFetch, invalidateCache, isCacheHit, CACHE_KEYS, CACHE_TTL } from '@/lib/dataCache';
 
 const BLANK = {
   cnpj: '', razao_social: '', nome_fantasia: '',
@@ -35,7 +36,9 @@ function maskPhone(v: string) {
 
 export default function UnidadesCadastroAdmin() {
   const [unidades,   setUnidades]   = useState<Unidade[]>([]);
-  const [loading,    setLoading]    = useState(true);
+  const [loading,    setLoading]    = useState(
+    () => !isCacheHit(CACHE_KEYS.ADMIN_UNITS, CACHE_TTL.ADMIN),
+  );
   const [search,     setSearch]     = useState('');
   const [filter,     setFilter]     = useState<'todos' | 'matriz' | 'filial'>('todos');
   const [form,       setForm]       = useState<UndForm>(BLANK);
@@ -51,10 +54,17 @@ export default function UnidadesCadastroAdmin() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) invalidateCache(CACHE_KEYS.ADMIN_UNITS, CACHE_KEYS.UNIDADES);
     setLoading(true);
-    const res = await fetch('/api/admin/unidades-rh');
-    if (res.ok) setUnidades(await res.json());
+    try {
+      const data = await cachedFetch<Unidade[]>(
+        CACHE_KEYS.ADMIN_UNITS,
+        () => fetch('/api/admin/unidades-rh').then(r => r.json()),
+        CACHE_TTL.ADMIN,
+      );
+      setUnidades(data);
+    } catch {}
     setLoading(false);
   }, []);
 
@@ -166,7 +176,7 @@ export default function UnidadesCadastroAdmin() {
       if (!res.ok) { showToast(json.error ?? 'Erro ao salvar.', true); return; }
       showToast(editing ? 'Unidade atualizada.' : 'Unidade criada.');
       cancelEdit();
-      await load();
+      await load(true);
     } finally { setSaving(false); setGeoState('idle'); }
   }
 
@@ -177,7 +187,7 @@ export default function UnidadesCadastroAdmin() {
     if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', true); return; }
     showToast('Unidade removida.');
     if (editing?.id === u.id) cancelEdit();
-    await load();
+    await load(true);
   }
 
   const accentColor = form.tipo_unidade === 'matriz' ? '#10b981' : '#3b82f6';
