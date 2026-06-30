@@ -1,26 +1,47 @@
+@keyframes dashSpin {
+  to { transform: rotate(360deg); }
+}
+
 .group {
   cursor: pointer;
-  transition: filter 0.18s ease;
+  transition: filter 0.22s ease;
 }
 
 .group:hover {
-  filter: drop-shadow(0 0 14px rgba(167, 139, 250, 0.5));
+  filter:
+    drop-shadow(0 0 10px rgba(167, 139, 250, 0.55))
+    drop-shadow(0 0 26px rgba(167, 139, 250, 0.22));
 }
 
 .group:active {
   filter: drop-shadow(0 0 20px rgba(167, 139, 250, 0.75));
 }
 
-.group:focus {
-  outline: none;
-}
+.group:focus { outline: none; }
 
 .group:focus-visible {
   filter: drop-shadow(0 0 16px rgba(167, 139, 250, 0.75));
 }
 
+/* Envolve apenas os elementos circulares (simétricos em torno de 0,0) — isola
+   o scale do hover para não incluir os rótulos de texto abaixo do círculo,
+   que deslocariam o bounding-box (fill-box) e causariam tremor no hover. */
+.visual {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.group:hover .visual {
+  transform: scale(1.08);
+}
+
+.group:active .visual {
+  transform: scale(0.97);
+}
+
 .border {
-  transition: stroke-opacity 0.18s ease, stroke-width 0.18s ease;
+  transition: stroke-opacity 0.2s ease, stroke-width 0.2s ease;
 }
 
 .group:hover .border,
@@ -28,4 +49,20 @@
 .group:focus-visible .border {
   stroke-opacity: 1;
   stroke-width: 3.5;
+}
+
+/* Anel tracejado gira no hover */
+.dashRing {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.group:hover .dashRing {
+  animation: dashSpin 5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group { transition: filter 0.15s ease; }
+  .group:hover .visual { transform: none; }
+  .group:hover .dashRing { animation: none; }
 }

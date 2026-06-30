@@ -282,9 +282,10 @@ export async function importFromFuncionarios(supabase: SupabaseClient): Promise<
 
   const directors      = withLevel.filter((x) => x.level === 0);
   const gms            = withLevel.filter((x) => x.level === 1);
-  // Regra: só o 1º diretor fica no centro (nível 0). Do 2º em diante vira Diretor de Setor.
-  const primaryDirectorFuncId = directors[0]?.f.id ?? null;
-  const rootDirectorId = primaryDirectorFuncId ? `rh-${primaryDirectorFuncId}` : null;
+  // Todos os diretores (nivel 0) ficam no centro como nós raiz separados.
+  // O frontend mescla múltiplos nós level-0 num único CenterCard com "&".
+  // O primeiro diretor serve como referência de parentId para as GGs.
+  const rootDirectorId = directors[0]?.f.id ? `rh-${directors[0].f.id}` : null;
   // Setores penduram na Gerência Geral única; com 0 ou várias GGs, vão sob a Diretoria.
   const sectorParentId = (gms.length === 1 ? `rh-${gms[0].f.id}` : null) ?? rootDirectorId;
 
@@ -311,15 +312,14 @@ export async function importFromFuncionarios(supabase: SupabaseClient): Promise<
 
   // 5. Pessoas (e liderança) — upsert por id `rh-{uuid}`
   for (const { f, level, role } of withLevel) {
-    // Só o primeiro diretor (nível 0) ocupa o centro; do 2º em diante vira
-    // Diretor de Setor (nível 4), nunca outro nó central.
-    const isPrimaryDirector = level === 0 && f.id === primaryDirectorFuncId;
-    const effectiveLevel    = level === 0 && !isPrimaryDirector ? 4 : level;
+    // Todos os diretores (nivel 0) ficam como raiz (parentId null); o frontend
+    // detecta múltiplos nós level-0 e os mescla num único CenterCard com "&".
+    const effectiveLevel = level;
 
     let parentId: string | null;
-    if (isPrimaryDirector)         parentId = null;                                          // Diretoria (raiz única)
-    else if (effectiveLevel === 1) parentId = rootDirectorId;                                // Gerência Geral
-    else                           parentId = sectorNodeIdBySetorId.get(f.id_setor) ?? null; // pessoa/diretor → setor
+    if (level === 0)               parentId = null;                                          // Diretoria (raiz, todos)
+    else if (level === 1)          parentId = rootDirectorId;                                // Gerência Geral
+    else                           parentId = sectorNodeIdBySetorId.get(f.id_setor) ?? null; // pessoa → setor
 
     if (parentId === null && effectiveLevel >= 2) orphans++;
 

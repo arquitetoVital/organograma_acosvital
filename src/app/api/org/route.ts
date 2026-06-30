@@ -22,6 +22,14 @@ interface VwNode {
   id_ent:              string | null;
 }
 
+// Setores que são apenas containers organizacionais e não devem aparecer como
+// nós no organograma (seus filhos diretos sobem para o pai do setor oculto).
+const HIDDEN_SECTOR_NAMES = new Set(['diretoria', 'gerencia geral']);
+
+function normalizeName(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
 function toOrgNode(n: VwNode): OrgNode {
   return {
     id:               n.id,
@@ -53,16 +61,25 @@ export async function GET(request: NextRequest) {
     const raw   = await apiGet<unknown>('/vw_organograma_nodes', params);
     const nodes = (extractArray(raw, 'nodes') as VwNode[]).map(toOrgNode);
 
-    // Oculta o setor "Diretoria" do organograma; seus filhos diretos viram raízes
-    const dirSetorIds = new Set(
-      nodes.filter(n => n.isSector && n.name.toLowerCase() === 'diretoria').map(n => n.id),
+    // Oculta setores que são apenas containers organizacionais (Diretoria, Gerência
+    // Geral): seus filhos diretos "sobem" para o pai do setor oculto (cascateando
+    // se houver mais de um nível oculto encadeado).
+    const hiddenSectorIds = new Set(
+      nodes.filter(n => n.isSector && HIDDEN_SECTOR_NAMES.has(normalizeName(n.name))).map(n => n.id),
     );
-    const visible = dirSetorIds.size === 0 ? nodes : nodes
-      .filter(n => !dirSetorIds.has(n.id))
-      .map(n => ({
-        ...n,
-        parentId: n.parentId && dirSetorIds.has(n.parentId) ? null : n.parentId,
-      }));
+    const parentById = new Map(nodes.map(n => [n.id, n.parentId]));
+    const resolveParent = (parentId: string | null): string | null => {
+      let pid = parentId;
+      const seen = new Set<string>();
+      while (pid && hiddenSectorIds.has(pid) && !seen.has(pid)) {
+        seen.add(pid);
+        pid = parentById.get(pid) ?? null;
+      }
+      return pid;
+    };
+    const visible = hiddenSectorIds.size === 0 ? nodes : nodes
+      .filter(n => !hiddenSectorIds.has(n.id))
+      .map(n => ({ ...n, parentId: resolveParent(n.parentId) }));
 
     return NextResponse.json(visible);
   } catch (e) {

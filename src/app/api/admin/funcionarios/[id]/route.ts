@@ -72,6 +72,37 @@ export async function PUT(
       }
     }
 
+    // Garante nó no organograma para diretores que ficaram sem nó
+    // (bug legado: co-diretores eram criados com skip_org_node=true)
+    if (b.id_cargo !== undefined) {
+      try {
+        const cargoRaw = await apiGet<unknown>(`/cargos/${String(b.id_cargo)}`);
+        const cargoObj = (cargoRaw && typeof cargoRaw === 'object' && !Array.isArray(cargoRaw))
+          ? cargoRaw as Record<string, unknown> : {};
+        const nvlRaw = cargoObj.nvl_permissao
+          ?? (cargoObj.cargo as Record<string, unknown> | undefined)?.nvl_permissao;
+        const nvl = typeof nvlRaw === 'number' ? nvlRaw : 9;
+
+        if (nvl <= 1) {
+          // Garante que o nó existe e tem id_ent correto (repara nós legados com id_ent nulo)
+          try {
+            const existingRaw = await apiGet<unknown>(`/organograma_nodes/${id}`);
+            const existObj = (existingRaw && typeof existingRaw === 'object' && !Array.isArray(existingRaw))
+              ? existingRaw as Record<string, unknown> : {};
+            const existInner = (existObj.organograma_node as Record<string, unknown> | undefined) ?? existObj;
+            if (!existInner.id_ent || existInner.id_ent !== id) {
+              await apiPut(`/organograma_nodes/${id}`, { id_ent: id, parent_id: null });
+            }
+          } catch {
+            // Nó não existe — cria como raiz
+            try {
+              await apiPost('/organograma_nodes', { id, id_ent: id, parent_id: null, is_sector: false });
+            } catch { /* best-effort */ }
+          }
+        }
+      } catch { /* best-effort: não bloqueia o save se falhar */ }
+    }
+
     return NextResponse.json(data);
   } catch (e) {
     const { msg, status } = handleApiError(e, 'Erro ao atualizar funcionário.');

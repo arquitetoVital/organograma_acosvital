@@ -1656,9 +1656,15 @@ export default function OrgChart({
                     <CenterCard node={overviewDirectors[0]} color={levelColors[0]} hideText={hideText} />
                   )}
                   {overviewDirectors.length > 1 && (() => {
+                    // Achata nomes que já contenham " & " (dados legados) e remove duplicatas
+                    const allNames = [...new Set(
+                      overviewDirectors.flatMap(d =>
+                        d.name.split(/\s+&\s+/).map(n => n.trim()).filter(Boolean)
+                      )
+                    )];
                     const merged: typeof overviewDirectors[0] = {
                       ...overviewDirectors[0],
-                      name: overviewDirectors.map(d => d.name).join(' & '),
+                      name: allNames.join(' & '),
                       photoUrl: overviewDirectors.find(d => d.photoUrl)?.photoUrl,
                     };
                     return <CenterCard node={merged} color={levelColors[0]} hideText={hideText} />;

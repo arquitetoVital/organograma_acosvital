@@ -70,6 +70,10 @@ export default function DirectorModal({
       showToast('Preencha o nome da segunda pessoa.', 'error');
       return;
     }
+    if (n1.includes('&') || (isSharedDirector && n2.includes('&'))) {
+      showToast('Os nomes não devem conter "&". Use os campos separados para cada pessoa.', 'error');
+      return;
+    }
 
     // Bloqueia criar individual quando já existe diretoria (shared sempre permite)
     if (!isEditing && !isSharedDirector && centralDirectorExists) {

@@ -590,13 +590,13 @@ export default function FuncionariosAdmin() {
 
   function openEdit(f: Funcionario) {
     setEditing(f);
-    const isPairedEdit = / & /.test(f.nome_completo);
-    const nameParts    = f.nome_completo.split(/\s+&\s+/);
-    const mainNome     = isPairedEdit ? (nameParts[0]?.trim() ?? f.nome_completo) : f.nome_completo;
-    const coNome       = isPairedEdit ? (nameParts[1]?.trim() ?? '') : '';
-    const coRecord     = isPairedEdit
-      ? funcionarios.find(fn => fn.nome_completo === coNome && fn.id_cargo === f.id_cargo && fn.id !== f.id)
-      : undefined;
+    // Nome individual já está correto no banco — busca co-diretor pelo cargo e setor
+    const mainNome = f.nome_completo;
+    const coRecord = funcionarios.find(
+      fn => fn.id_cargo === f.id_cargo && fn.id !== f.id
+        && (fn.id_setor === f.id_setor || !fn.id_setor)
+    );
+    const coNome   = coRecord?.nome_completo ?? '';
 
     setForm({
       nome_completo:    mainNome,
@@ -664,9 +664,8 @@ export default function FuncionariosAdmin() {
       const url    = editing ? `/api/admin/funcionarios/${editing.id}` : '/api/admin/funcionarios';
       const method = editing ? 'PUT' : 'POST';
       const hasCo  = form.co_diretor_nome.trim() !== '';
-      const nomeFinal = hasCo
-        ? `${form.nome_completo.trim()} & ${form.co_diretor_nome.trim()}`
-        : form.nome_completo.trim();
+      // Salva APENAS o nome individual — o frontend une com "&" ao exibir
+      const nomeFinal = form.nome_completo.trim();
 
       const {
         co_diretor_nome: _cn, co_id: _ci,
@@ -700,17 +699,20 @@ export default function FuncionariosAdmin() {
           logradouro: form.co_logradouro || null, numero: form.co_numero || null,
           complemento: form.co_complemento || null, bairro: form.co_bairro || null,
           cidade: form.co_cidade || null, estado: form.co_estado || null, cep: form.co_cep || null,
-          skip_org_node: true,
+          // Não usa skip_org_node: o co-diretor recebe nó próprio (level 0) para que
+          // o OrgChart detecte dois nós raiz e os mescle num único CenterCard com "&"
         };
         const coRes = await fetch(coUrl, { method: form.co_id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(coBody) });
         if (!coRes.ok) {
           const coJson = await coRes.json();
           showToast(`Diretor salvo, mas erro no co-diretor: ${coJson.error ?? 'desconhecido'}`, true);
+          invalidateCache(CACHE_KEYS.ORG);
           closeDrawer(); await loadFuncionarios(true); return;
         }
       }
 
       showToast(editing ? 'Funcionário atualizado.' : 'Funcionário cadastrado no organograma.');
+      invalidateCache(CACHE_KEYS.ORG);
       closeDrawer();
       await loadFuncionarios(true);
     } finally {
@@ -724,6 +726,7 @@ export default function FuncionariosAdmin() {
     const json = await res.json();
     if (!res.ok) { showToast(json.error ?? 'Erro ao excluir.', true); return; }
     showToast('Funcionário removido do sistema e do organograma.');
+    invalidateCache(CACHE_KEYS.ORG);
     closeDrawer();
     await loadFuncionarios(true);
   }

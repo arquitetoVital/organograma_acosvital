@@ -50,45 +50,48 @@ export default function SectorCard({ node, color, onClick, hideText = false }: P
         </radialGradient>
       </defs>
 
-      {/* Outer glow */}
-      <circle cx={0} cy={0} r={r + 10} fill={color} fillOpacity={0.08} />
+      <g className={styles.visual}>
+        {/* Outer glow */}
+        <circle cx={0} cy={0} r={r + 10} fill={color} fillOpacity={0.08} />
 
-      {/* Dashed ring */}
-      <circle
-        cx={0} cy={0} r={r + 4}
-        fill="none"
-        stroke={color}
-        strokeWidth={1}
-        strokeOpacity={0.3}
-        strokeDasharray="4 3"
-      />
+        {/* Dashed ring — gira no hover via CSS */}
+        <circle
+          cx={0} cy={0} r={r + 4}
+          fill="none"
+          stroke={color}
+          strokeWidth={1}
+          strokeOpacity={0.3}
+          strokeDasharray="4 3"
+          className={styles.dashRing}
+        />
 
-      {/* Main border */}
-      <circle
-        cx={0} cy={0} r={r + 2}
-        fill="none"
-        stroke={color}
-        strokeWidth={2.5}
-        strokeOpacity={0.85}
-        className={styles.border}
-      />
+        {/* Main border */}
+        <circle
+          cx={0} cy={0} r={r + 2}
+          fill="none"
+          stroke={color}
+          strokeWidth={2.5}
+          strokeOpacity={0.85}
+          className={styles.border}
+        />
 
-      {/* Background fill */}
-      <circle cx={0} cy={0} r={r} fill={`url(#grad-sec-${node.id})`} />
+        {/* Background fill */}
+        <circle cx={0} cy={0} r={r} fill={`url(#grad-sec-${node.id})`} />
 
-      {/* Abbreviation (always shown) */}
-      <text
-        x={0} y={0}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill={color}
-        fontSize={r * 0.52}
-        fontWeight="800"
-        fontFamily={FONT}
-        opacity={0.55}
-      >
-        {abbrev(node.name)}
-      </text>
+        {/* Abbreviation (always shown) */}
+        <text
+          x={0} y={0}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill={color}
+          fontSize={r * 0.52}
+          fontWeight="800"
+          fontFamily={FONT}
+          opacity={0.55}
+        >
+          {abbrev(node.name)}
+        </text>
+      </g>
 
       {!hideText && (
         <>

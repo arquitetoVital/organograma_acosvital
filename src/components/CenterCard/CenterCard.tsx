@@ -63,6 +63,16 @@ export default function CenterCard({ node, color, hideText = false }: Props) {
           </clipPath>
         </defs>
 
+        {/* Auras pulsantes */}
+        <circle cx={0} cy={0} r={CR + 36} fill={color} fillOpacity={0.10} className={styles.glowAura} />
+        <circle cx={0} cy={0} r={CR + 52} fill={color} fillOpacity={0.06} className={styles.glowAura2} />
+
+        {/* Anel orbital externo */}
+        <circle cx={0} cy={0} r={CR + 22} fill="none" stroke={color} strokeWidth={0.7} strokeOpacity={0.35} strokeDasharray="12 9" className={styles.orbitRingOuter} />
+
+        {/* Anel orbital interno (sentido contrário) */}
+        <circle cx={0} cy={0} r={CR + 13} fill="none" stroke={color} strokeWidth={0.5} strokeOpacity={0.22} strokeDasharray="5 7" className={styles.orbitRingInner} />
+
         {/* Outer glow */}
         <circle cx={0} cy={0} r={CR + 10} fill={color} fillOpacity={0.07} />
 
@@ -124,6 +134,16 @@ export default function CenterCard({ node, color, hideText = false }: Props) {
           <circle cx={0} cy={0} r={CR - 1} />
         </clipPath>
       </defs>
+
+      {/* Auras pulsantes */}
+      <circle cx={0} cy={0} r={CR + 36} fill={color} fillOpacity={0.10} className={styles.glowAura} />
+      <circle cx={0} cy={0} r={CR + 52} fill={color} fillOpacity={0.06} className={styles.glowAura2} />
+
+      {/* Anel orbital externo */}
+      <circle cx={0} cy={0} r={CR + 22} fill="none" stroke={color} strokeWidth={0.7} strokeOpacity={0.35} strokeDasharray="12 9" className={styles.orbitRingOuter} />
+
+      {/* Anel orbital interno (sentido contrário) */}
+      <circle cx={0} cy={0} r={CR + 13} fill="none" stroke={color} strokeWidth={0.5} strokeOpacity={0.22} strokeDasharray="5 7" className={styles.orbitRingInner} />
 
       {/* Outer glow */}
       <circle cx={0} cy={0} r={CR + 10} fill={color} fillOpacity={0.07} />
