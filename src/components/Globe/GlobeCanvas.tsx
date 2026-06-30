@@ -786,14 +786,15 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
       const bulkAlpha = dim ? 0.1 : 1;
 
       if (visGroups.length > 0) {
-        // Step 3a — Pulse rings (apenas sem foco; no foco o destaque dourado assume)
+        // Step 3a — 3 anéis de pulso escalonados (sem foco)
         if (!dim) {
-          for (let ring = 0; ring < 2; ring++) {
-            const ph  = ((t * 1.1 + ring * 0.5) % 1);
-            const rad = ph * 20 + 4;
-            ctx.globalAlpha = (1 - ph) * 0.42;
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 1.0;
+          for (let ring = 0; ring < 3; ring++) {
+            const ph  = ((t * 0.85 + ring * 0.33) % 1);
+            const rad = ph * 30 + 5;
+            const alpha = Math.pow(1 - ph, 1.4) * 0.58;
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = ring === 0 ? '#ef4444' : ring === 1 ? '#f87171' : '#fca5a5';
+            ctx.lineWidth = ring === 0 ? 1.4 : ring === 1 ? 1.0 : 0.7;
             ctx.beginPath();
             for (const { sx, sy } of visGroups) {
               ctx.moveTo(sx + rad, sy);
@@ -804,27 +805,41 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
           ctx.globalAlpha = 1;
         }
 
-        // Step 3b — Red dots (ONE fill), esmaecidos quando há foco
+        // Step 3b — Orbe de glow individual por ponto (até 80 visíveis)
+        if (visGroups.length <= 80) {
+          ctx.globalAlpha = bulkAlpha;
+          for (const { sx, sy } of visGroups) {
+            const og = ctx.createRadialGradient(sx, sy, 0, sx, sy, 20);
+            og.addColorStop(0,   'rgba(239,68,68,0.60)');
+            og.addColorStop(0.45,'rgba(239,68,68,0.20)');
+            og.addColorStop(1,   'rgba(239,68,68,0)');
+            ctx.fillStyle = og;
+            ctx.beginPath(); ctx.arc(sx, sy, 20, 0, TAU); ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        // Step 3c — Red dots (ONE fill), esmaecidos quando há foco
         ctx.globalAlpha = bulkAlpha;
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
         for (const { sx, sy } of visGroups) {
-          ctx.moveTo(sx + 5, sy);
-          ctx.arc(sx, sy, 5, 0, TAU);
+          ctx.moveTo(sx + 6, sy);
+          ctx.arc(sx, sy, 6, 0, TAU);
         }
         ctx.fill();
 
-        // Step 3c — White centers (ONE fill)
-        ctx.fillStyle = '#ffffff';
+        // Step 3d — White highlight (ONE fill)
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
         ctx.beginPath();
         for (const { sx, sy } of visGroups) {
-          ctx.moveTo(sx + 2, sy);
-          ctx.arc(sx, sy, 2, 0, TAU);
+          ctx.moveTo(sx + 2.5, sy);
+          ctx.arc(sx, sy, 2.5, 0, TAU);
         }
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        // Step 3d — Count badge for groups with multiple clients
+        // Step 3e — Count badge for groups with multiple clients
         const hasBadges = visGroups.some(g => g.ids.length > 1);
         if (hasBadges) {
           ctx.save();
@@ -848,7 +863,7 @@ export default function GlobeCanvas({ points, theme = 'hub', onPointClick, focus
           ctx.restore();
         }
 
-        // Step 3e — Empresa em foco desenhada por cima das esmaecidas
+        // Step 3f — Empresa em foco desenhada por cima das esmaecidas
         if (dim) {
           const fg = visGroups.find((g) => g.ids.includes(focusedId!));
           if (fg) {

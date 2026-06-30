@@ -267,3 +267,55 @@
   font-weight: 800;
   color: #ef4444;
 }
+
+/* ── Responsividade do painel de controle ── */
+@media (max-width: 900px) {
+  .controlPanel {
+    bottom: 20px;
+    right: 16px;
+    gap: 2px;
+    padding: 6px 4px;
+  }
+  .panelBtn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .controlPanel {
+    /* Barra horizontal centralizada na parte inferior */
+    bottom: 12px;
+    right: 50%;
+    transform: translateX(50%);
+    flex-direction: row;
+    border-radius: 40px;
+    padding: 4px 6px;
+    gap: 1px;
+  }
+  .panelBtn {
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+  }
+  .panelDivider {
+    width: 1px;
+    height: 18px;
+    margin: 0 2px;
+  }
+  .panelZoomPct {
+    font-size: 8px;
+    padding: 0 2px;
+  }
+  .statsBar {
+    bottom: 56px;
+    left: 12px;
+  }
+  .statItem {
+    padding: 8px 14px;
+  }
+  .statValue {
+    font-size: 22px;
+  }
+}

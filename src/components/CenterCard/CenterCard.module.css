@@ -1,19 +1,74 @@
+/* ── Animações ─────────────────────────────────────────────────────────── */
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes orbitSpinReverse {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+@keyframes glowBreathe {
+  0%, 100% { opacity: 0.10; }
+  50%       { opacity: 0.32; }
+}
+
+@keyframes glowBreathe2 {
+  0%, 100% { opacity: 0.06; }
+  50%       { opacity: 0.18; }
+}
+
+/* ── Anel orbital externo (gira lento) ──────────────────────────────────── */
+.orbitRingOuter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbitSpin 22s linear infinite;
+}
+
+/* ── Anel orbital interno (gira no sentido contrário) ───────────────────── */
+.orbitRingInner {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbitSpinReverse 14s linear infinite;
+}
+
+/* ── Aura externa (respira) ─────────────────────────────────────────────── */
+.glowAura {
+  animation: glowBreathe 4s ease-in-out infinite;
+}
+
+/* ── Segunda aura (offset de fase) ─────────────────────────────────────── */
+.glowAura2 {
+  animation: glowBreathe2 4s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+/* ── Grupo geral ────────────────────────────────────────────────────────── */
 .group {
   cursor: default;
   transform-box: fill-box;
   transform-origin: center;
-  transition: filter 0.28s ease;
+  transition: filter 0.35s ease;
 }
 
 .group:hover {
-  filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.35));
+  filter: drop-shadow(0 0 28px rgba(245, 158, 11, 0.50));
 }
 
 .border {
-  transition: stroke-opacity 0.28s ease, stroke-width 0.28s ease;
+  transition: stroke-opacity 0.3s ease, stroke-width 0.3s ease;
 }
 
 .group:hover .border {
   stroke-opacity: 1;
   stroke-width: 3;
+}
+
+/* ── Desativa animações para quem prefere menos movimento ───────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .orbitRingOuter,
+  .orbitRingInner { animation: none; }
+  .glowAura,
+  .glowAura2      { animation: none; opacity: 0.12; }
 }

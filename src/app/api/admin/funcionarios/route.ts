@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/apiAuth';
-import { apiGet, apiPost, apiDelete, handleApiError, fetchAllPages } from '@/lib/apiClient';
+import { ApiError, apiGet, apiPost, apiPut, apiDelete, handleApiError, fetchAllPages } from '@/lib/apiClient';
 import { recomputeSectorHierarchy } from '@/lib/sectorHierarchy';
 
 export const dynamic = 'force-dynamic';
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
   // Cria o funcionário
   let funcData: { id: string };
   try {
-    funcData = await apiPost<{ id: string }>('/funcionarios', {
+    const rawPost = await apiPost<unknown>('/funcionarios', {
       nome_completo:     String(b.nome_completo).trim(),
       id_cargo:          String(b.id_cargo),
       id_setor:          String(b.id_setor),
@@ -106,13 +106,23 @@ export async function POST(request: NextRequest) {
       estado:            b.estado            ? String(b.estado).toUpperCase() : null,
       cep:               b.cep               ? String(b.cep).replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2') : null,
     });
+    // API pode retornar { id: "..." } ou { funcionario: { id: "..." }, ... }
+    const postObj = (rawPost && typeof rawPost === 'object' && !Array.isArray(rawPost))
+      ? rawPost as Record<string, unknown> : {};
+    const inner = (postObj.funcionario as Record<string, unknown> | undefined) ?? postObj;
+    funcData = inner as { id: string };
+    if (!funcData.id || typeof funcData.id !== 'string') {
+      console.error('[api/admin/funcionarios POST] API não retornou id:', JSON.stringify(rawPost));
+      return NextResponse.json({ error: 'API não retornou ID do funcionário criado.' }, { status: 500 });
+    }
   } catch (e) {
     const { msg, status } = handleApiError(e, 'Erro ao criar funcionário.');
     if (status === 409) return NextResponse.json({ error: 'CPF ou CNPJ já cadastrado.' }, { status: 409 });
     return NextResponse.json({ error: msg }, { status });
   }
 
-  // Co-diretor: não cria nó no organograma (já existe o nó do diretor principal)
+  // skip_org_node foi removido: todos os diretores criam nó próprio no organograma.
+  // Mantido apenas para compatibilidade com chamadas legadas (não deve ser enviado).
   if (skipOrgNode) {
     return NextResponse.json({ ...funcData }, { status: 201 });
   }
@@ -133,8 +143,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Cria o nó no organograma via API externa
-  // O nó usa o mesmo UUID do funcionário como id, facilitando lookups futuros
+  // Cria o nó no organograma. Se já existir (409 — tentativa anterior incompleta),
+  // tenta corrigir o id_ent via PUT em vez de abortar.
   try {
     await apiPost('/organograma_nodes', {
       id:        funcData.id,
@@ -143,13 +153,30 @@ export async function POST(request: NextRequest) {
       is_sector: false,
     });
   } catch (e) {
-    // Rollback: remove o funcionário recém-criado
-    try { await apiDelete(`/funcionarios/${funcData.id}`); } catch { /* best-effort */ }
-    const { msg } = handleApiError(e);
-    return NextResponse.json(
-      { error: `Funcionário criado mas falha ao criar nó no organograma: ${msg}` },
-      { status: 500 },
-    );
+    if (e instanceof ApiError && e.status === 409) {
+      // Nó já existe — pode ter id_ent errado de uma criação anterior; tenta corrigir.
+      try {
+        await apiPut(`/organograma_nodes/${funcData.id}`, {
+          id_ent:    funcData.id,
+          parent_id: orgParentId,
+        });
+      } catch {
+        // PUT também falhou — rollback do funcionário
+        try { await apiDelete(`/funcionarios/${funcData.id}`); } catch { /* best-effort */ }
+        return NextResponse.json(
+          { error: 'Não foi possível criar ou reparar o nó no organograma.' },
+          { status: 500 },
+        );
+      }
+    } else {
+      // Outro erro — rollback do funcionário
+      try { await apiDelete(`/funcionarios/${funcData.id}`); } catch { /* best-effort */ }
+      const { msg } = handleApiError(e);
+      return NextResponse.json(
+        { error: `Funcionário criado mas falha ao criar nó no organograma: ${msg}` },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ...funcData, org_node_id: funcData.id }, { status: 201 });

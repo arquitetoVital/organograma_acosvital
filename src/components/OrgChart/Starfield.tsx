@@ -31,7 +31,7 @@ interface Nebula {
   alpha: number;
 }
 
-const STAR_COUNT = 170;
+const STAR_COUNT = 230;
 const TINTS = ['255,255,255', '255,255,255', '255,255,255', '205,222,255', '255,240,214'];
 
 function makeStars(): Star[] {
@@ -52,9 +52,10 @@ function makeStars(): Star[] {
 }
 
 const NEBULAE: Nebula[] = [
-  { nx: 0.26, ny: 0.32, r: 0.55, depth: 0.15, color: '37, 99, 235',  alpha: 0.10 },
-  { nx: 0.74, ny: 0.64, r: 0.50, depth: 0.20, color: '139, 92, 246', alpha: 0.09 },
-  { nx: 0.58, ny: 0.18, r: 0.42, depth: 0.10, color: '20, 184, 166', alpha: 0.06 },
+  { nx: 0.26, ny: 0.32, r: 0.58, depth: 0.15, color: '37, 99, 235',  alpha: 0.13 },
+  { nx: 0.74, ny: 0.64, r: 0.52, depth: 0.20, color: '139, 92, 246', alpha: 0.11 },
+  { nx: 0.58, ny: 0.18, r: 0.44, depth: 0.10, color: '20, 184, 166', alpha: 0.08 },
+  { nx: 0.15, ny: 0.78, r: 0.36, depth: 0.08, color: '245, 158, 11', alpha: 0.05 },
 ];
 
 export default function Starfield({ vbRef, baseW }: Props) {
@@ -141,11 +142,12 @@ export default function Starfield({ vbRef, baseW }: Props) {
         ctx.fillStyle = `rgba(${s.tint}, ${alpha})`;
         ctx.fill();
 
-        // Faint cross-glow on the brightest near stars
-        if (s.depth > 0.78) {
-          ctx.fillStyle = `rgba(${s.tint}, ${alpha * 0.18})`;
-          ctx.fillRect(px - size * 3, py - size * 0.35, size * 6, size * 0.7);
-          ctx.fillRect(px - size * 0.35, py - size * 3, size * 0.7, size * 6);
+        // Cross-glow nas estrelas mais brilhantes e próximas
+        if (s.depth > 0.72 && size > 0.9) {
+          const glowA = alpha * 0.22;
+          ctx.fillStyle = `rgba(${s.tint}, ${glowA})`;
+          ctx.fillRect(px - size * 4, py - size * 0.38, size * 8, size * 0.76);
+          ctx.fillRect(px - size * 0.38, py - size * 4, size * 0.76, size * 8);
         }
       }
 

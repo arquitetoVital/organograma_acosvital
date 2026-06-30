@@ -56,33 +56,35 @@ function NodeCardInner({ node, color, vbW, hideText = false }: Props) {
         )}
       </defs>
 
-      {/* Outer glow (neon em camadas) */}
-      <circle cx={0} cy={0} r={r + 12} fill={color} fillOpacity={0.06} />
-      <circle cx={0} cy={0} r={r + 5}  fill={color} fillOpacity={0.16} />
+      <g className={styles.visual}>
+        {/* Outer glow (neon em camadas) */}
+        <circle cx={0} cy={0} r={r + 12} fill={color} fillOpacity={0.06} />
+        <circle cx={0} cy={0} r={r + 5}  fill={color} fillOpacity={0.16} />
 
-      {/* Border */}
-      <circle cx={0} cy={0} r={r + 2} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.75} className={styles.ring} />
+        {/* Border */}
+        <circle cx={0} cy={0} r={r + 2} fill="none" stroke={color} strokeWidth={2} strokeOpacity={0.75} className={styles.ring} />
 
-      {/* Background com gradiente da cor do nível */}
-      <circle cx={0} cy={0} r={r} fill={`url(#grad-${node.id})`} />
+        {/* Background com gradiente da cor do nível */}
+        <circle cx={0} cy={0} r={r} fill={`url(#grad-${node.id})`} />
 
-      {/* Initials fallback */}
-      {!showImage && (
-        <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={r * 0.52} fontWeight="700" fontFamily={FONT}>
-          {getInitials(node.name)}
-        </text>
-      )}
+        {/* Initials fallback */}
+        {!showImage && (
+          <text x={0} y={0} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={r * 0.52} fontWeight="700" fontFamily={FONT}>
+            {getInitials(node.name)}
+          </text>
+        )}
 
-      {/* Photo */}
-      {showImage && (
-        <image
-          href={node.photoUrl}
-          x={-r} y={-r}
-          width={r * 2} height={r * 2}
-          clipPath={`url(#${clipId})`}
-          preserveAspectRatio="xMidYMid slice"
-        />
-      )}
+        {/* Photo */}
+        {showImage && (
+          <image
+            href={node.photoUrl}
+            x={-r} y={-r}
+            width={r * 2} height={r * 2}
+            clipPath={`url(#${clipId})`}
+            preserveAspectRatio="xMidYMid slice"
+          />
+        )}
+      </g>
 
       {/* Labels (only when node is large enough on screen) */}
       {showLabel && (

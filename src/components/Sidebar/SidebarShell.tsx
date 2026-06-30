@@ -79,11 +79,33 @@ export default function SidebarShell({ isAdmin, userEmail, children }: Props) {
 
   if (!showSidebar) return <FsContext.Provider value={fsMode}>{children}</FsContext.Provider>;
 
-  // Modo TV e modo limpo: sidebar completamente oculta, conteúdo fullscreen
-  if (fsMode === 'tv' || fsMode === 'clean') {
+  // Modo TV: sidebar completamente oculta, conteúdo fullscreen sem controles
+  if (fsMode === 'tv') {
     return (
       <FsContext.Provider value={fsMode}>
       <div className={styles.shell}>
+        <div className={styles.content}>{children}</div>
+      </div>
+      </FsContext.Provider>
+    );
+  }
+
+  // Modo limpo: sidebar flutuante visível sobre o conteúdo
+  if (fsMode === 'clean') {
+    return (
+      <FsContext.Provider value={fsMode}>
+      <div className={styles.shell}>
+        <Sidebar
+          isAdmin={isAdmin}
+          userEmail={userEmail}
+          floating={true}
+          isTvFs={false}
+          isAnyFs={true}
+          onTvFs={enterTvFs}
+          onCleanFs={enterCleanFs}
+          mobileOpen={false}
+          onMobileClose={closeMobile}
+        />
         <div className={styles.content}>{children}</div>
       </div>
       </FsContext.Provider>

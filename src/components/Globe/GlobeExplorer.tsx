@@ -113,18 +113,18 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
           focusTarget={focus}
           focusedId={focusedId}
           hideInfoOverlays
-          hideControls={isFs}
-          xShift={isFs ? 0.22 : 0}
+          hideControls={fsMode === 'tv'}
+          xShift={fsMode === 'tv' ? 0.22 : 0}
         />
 
-        {loading && !isFs && (
+        {loading && fsMode !== 'tv' && (
           <div className={styles.loadingBadge}>
             <span className={styles.loadingDot} />
             {loadingText}
           </div>
         )}
 
-        {!isFs && (
+        {fsMode !== 'tv' && (
           <button
             type="button"
             className={styles.panelToggle}
@@ -137,7 +137,7 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
           </button>
         )}
 
-        {isFs && theme === 'vital' && (
+        {fsMode === 'tv' && theme === 'vital' && (
           <div className={styles.fsOverlay}>
             <img src={LOGO_URL} alt="Açosvital" className={styles.fsLogo} />
             <p className={styles.fsLabel}>ONDE JÁ ESTAMOS</p>
@@ -151,7 +151,7 @@ export default function GlobeExplorer({ points, theme, loading, itemLabel, loadi
         )}
       </div>
 
-      {panelOpen && !isFs && (
+      {panelOpen && fsMode !== 'tv' && (
         <GlobePanel
           itemLabel={itemLabel}
           total={points.length}
