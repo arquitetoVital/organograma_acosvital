@@ -42,40 +42,53 @@ export async function PUT(
       : null;
   }
 
-  const cargoChanged  = b.id_cargo !== undefined;
-  const sectorChanged = b.id_setor !== undefined && b.id_setor !== '';
-
-  // Busca o setor atual antes de atualizar (necessário para recomputar o setor antigo)
+  // Busca estado atual para comparar e detectar mudanças reais de cargo/setor.
+  // Necessário para não recomputar a hierarquia em edições que não alteram estrutura
+  // (ex.: trocar foto ou telefone), o que sobrescreveria escolhas manuais de "reporta a".
   let oldSectorId: string | null = null;
-  if (sectorChanged || cargoChanged) {
-    try {
-      const raw = await apiGet<unknown>(`/funcionarios/${id}`);
-      const obj = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
-      const func = (obj.funcionario as Record<string, unknown> | undefined) ?? obj;
-      oldSectorId = typeof func.id_setor === 'string' ? func.id_setor : null;
-    } catch { /* best-effort */ }
-  }
+  let oldCargoId:  string | null = null;
+  try {
+    const raw = await apiGet<unknown>(`/funcionarios/${id}`);
+    const obj  = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+    const func = (obj.funcionario as Record<string, unknown> | undefined) ?? obj;
+    oldSectorId = typeof func.id_setor === 'string' ? func.id_setor : null;
+    oldCargoId  = typeof func.id_cargo === 'string' ? func.id_cargo : null;
+  } catch { /* best-effort */ }
+
+  // Só recomputa quando o valor REALMENTE muda (não apenas quando o campo está presente).
+  const cargoChanged  = b.id_cargo !== undefined && String(b.id_cargo)  !== (oldCargoId  ?? '');
+  const sectorChanged = b.id_setor !== undefined && b.id_setor !== ''   && String(b.id_setor) !== (oldSectorId ?? '');
 
   try {
     const data = await apiPut(`/funcionarios/${id}`, patch);
 
-    // Se o usuário escolheu explicitamente "reporta a", aplica no nó do organograma.
-    if (b.parent_node_id && typeof b.parent_node_id === 'string') {
-      apiPut(`/organograma_nodes/${id}`, { parent_id: b.parent_node_id }).catch(() => {/* best-effort */});
-    }
+    const explicitParent = b.parent_node_id && typeof b.parent_node_id === 'string'
+      ? b.parent_node_id as string
+      : null;
 
-    // Recomputa hierarquia automática do(s) setor(es) afetado(s)
+    // Recomputa hierarquia automática do(s) setor(es) afetado(s).
+    // Quando há um "reporta a" explícito, AWAITA a recomputa antes de sobrescrever —
+    // caso contrário a recomputa venceria a corrida e apagaria a escolha do usuário.
     if (sectorChanged || cargoChanged) {
       const newSectorId = sectorChanged ? String(b.id_setor) : (oldSectorId ?? null);
 
       if (newSectorId) {
-        recomputeSectorHierarchy(newSectorId).catch(() => {/* best-effort */});
+        if (explicitParent) {
+          await recomputeSectorHierarchy(newSectorId).catch(() => {/* best-effort */});
+        } else {
+          recomputeSectorHierarchy(newSectorId).catch(() => {/* best-effort */});
+        }
       }
 
       // Se o setor mudou, recomputa o setor antigo (alguém podia reportar a este funcionário)
       if (sectorChanged && oldSectorId && oldSectorId !== newSectorId) {
         recomputeSectorHierarchy(oldSectorId, { excludeId: id }).catch(() => {/* best-effort */});
       }
+    }
+
+    // Aplica o "reporta a" explícito DEPOIS da recomputa para não ser sobrescrito.
+    if (explicitParent) {
+      await apiPut(`/organograma_nodes/${id}`, { parent_id: explicitParent }).catch(() => {/* best-effort */});
     }
 
     // Garante nó no organograma para diretores que ficaram sem nó

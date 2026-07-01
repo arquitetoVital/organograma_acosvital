@@ -40,7 +40,7 @@ export default function OrgTreeView({ nodes, levelColors, levelNames, onSelect }
     if (!q) return null;
     return nodes
       .filter((n) => `${n.name} ${n.role}`.toLowerCase().includes(q))
-      .slice(0, 60);
+      .slice(0, 200);
   }, [query, nodes]);
 
   const toggle = (id: string) =>

@@ -457,10 +457,31 @@ export function calculateEvenSectorLayout(
           }
         });
         nodeAngles = [];
-        groups.forEach(({ parentAngle, nodes: grp }) => {
+        const G = groups.length;
+        groups.forEach(({ parentAngle, nodes: grp }, gi) => {
           const k = grp.length;
+          let effectiveStep = step;
+
+          if (G > 1 && k > 1) {
+            // Limita o arco do grupo para não invadir o território do pai vizinho.
+            // Calcula meia-distância até o pai anterior e o próximo (normalizados
+            // para evitar problemas de wrap em 0/2π).
+            const pNorm    = norm(parentAngle);
+            const prevNorm = gi > 0
+              ? norm(groups[gi - 1].parentAngle)
+              : norm(groups[G - 1].parentAngle) - PI2;
+            const nextNorm = gi < G - 1
+              ? norm(groups[gi + 1].parentAngle)
+              : norm(groups[0].parentAngle) + PI2;
+            const maxHalfArc = Math.min(pNorm - prevNorm, nextNorm - pNorm) / 2 * 0.82;
+            const naturalHalf = (k - 1) / 2 * step;
+            if (naturalHalf > maxHalfArc) {
+              effectiveStep = (maxHalfArc * 2) / (k - 1);
+            }
+          }
+
           grp.forEach((node, i) => {
-            nodeAngles.push({ node, angle: parentAngle + (i - (k - 1) / 2) * step });
+            nodeAngles.push({ node, angle: parentAngle + (i - (k - 1) / 2) * effectiveStep });
           });
         });
       }

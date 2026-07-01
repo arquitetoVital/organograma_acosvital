@@ -155,7 +155,8 @@ export default function OrgChart({
 
   // ── Lazy loading de filhos via ?parent_id= ────────────────────────────
   const [extraNodes, setExtraNodes] = useState<OrgNode[]>([]);
-  const loadedParentIds = useRef(new Set<string>());
+  const loadedParentIds  = useRef(new Set<string>());
+  const prefetchStarted  = useRef(false);
 
   // Nós completos = prop allNodes + lazy-loaded extras (sem duplicatas)
   const mergedNodes = useMemo(() => {
@@ -197,19 +198,37 @@ export default function OrgChart({
     }
   }, []);
 
-  // A view "Mapa" só carrega o detalhe de um setor sob demanda (clique → fetchChildren).
-  // A "Lista" precisa mostrar todo mundo de cara, então ao trocar para ela disparamos
-  // o BFS para cada setor presente no payload inicial (fetchChildren já recursa para
-  // os descendentes, então isso carrega a árvore inteira).
+  /** Dispara BFS a partir de todos os nós conhecidos (não apenas setores).
+   *  `fetchChildren` já deduplica via `loadedParentIds`, portanto chamar várias
+   *  vezes é seguro — só faz a requisição da primeira vez. */
+  const eagerLoadAll = useCallback(() => {
+    allNodes.forEach((n) => {
+      const canonId = n.id.startsWith('sec-') ? n.id.slice(4) : n.id;
+      fetchChildren(canonId);
+    });
+  }, [allNodes, fetchChildren]);
+
+  // Prefetch silencioso: logo que os nós raiz chegam, carrega a árvore completa
+  // em background (1 s de atraso para não competir com a animação orbital).
+  // Faz com que Lista e Busca estejam prontos quando o usuário precisar.
+  useEffect(() => {
+    if (allNodes.length === 0 || prefetchStarted.current) return;
+    prefetchStarted.current = true;
+    const t = setTimeout(eagerLoadAll, 1000);
+    return () => clearTimeout(t);
+  }, [allNodes, eagerLoadAll]);
+
+  // Lista: garante carregamento completo imediato (caso o prefetch ainda não tenha terminado).
   useEffect(() => {
     if (viewMode !== 'tree') return;
-    allNodes
-      .filter((n) => n.isSector)
-      .forEach((n) => {
-        const canonId = n.id.startsWith('sec-') ? n.id.slice(4) : n.id;
-        fetchChildren(canonId);
-      });
-  }, [viewMode, allNodes, fetchChildren]);
+    eagerLoadAll();
+  }, [viewMode, eagerLoadAll]);
+
+  // Busca: inicia carregamento assim que o usuário começa a digitar.
+  useEffect(() => {
+    if (!query) return;
+    eagerLoadAll();
+  }, [query, eagerLoadAll]);
 
   const openSector = useCallback(
     (id: string) => {
@@ -387,7 +406,7 @@ export default function OrgChart({
     if (!q) return [];
     return mergedNodes
       .filter((n) => `${n.name} ${n.role}`.toLowerCase().includes(q))
-      .slice(0, 8);
+      .slice(0, 20);
   }, [query, mergedNodes]);
 
   /** Sobe pela árvore até o setor que contém o nó (ou null se estiver no panorama). */
