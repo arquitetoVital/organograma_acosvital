@@ -230,13 +230,13 @@ export function calculateOverviewLayout(
  *   each parent so "4 children of 1 parent → parent is exactly in the middle."
  *   Em setores grandes o passo é uniforme (2π/n) → preenche a circunferência.
  *
- * COLUMN MODE (não cabe em volta — caso 40k): children are stacked RADIALLY (outward)
- *   instead of tangentially. Each parent gets a "fan of columns"; each column
- *   is a vertical beam of COL_DEPTH_MAX nodes extending away from the center.
- *   Example: 50 children → ceil(50/12) = 5 columns × 10 rows (≈ "2×5" grid
- *   but fan-shaped). The angle between adjacent columns adapts to the arc
- *   available per parent so columns never overlap each other.
- *   This keeps large datasets (500+) compact: columns grow outward, not around.
+ * COLUMN MODE (não cabe em volta, ou nível com gente demais): children are stacked
+ *   RADIALLY (outward) instead of tangentially. Each parent gets a "fan of columns",
+ *   split as evenly as possible around COL_TARGET_SIZE per column (e.g. 23 children
+ *   → 4 columns of 6/6/6/5, never an unbalanced 10/10/3). The angle between
+ *   adjacent columns adapts to the arc available per parent so columns never
+ *   overlap each other. This keeps large datasets (500+) compact: columns grow
+ *   outward, not around.
  */
 export function calculateEvenSectorLayout(
   nodes: OrgNode[],
@@ -248,12 +248,23 @@ export function calculateEvenSectorLayout(
   const PI2   = 2 * Math.PI;
   const MIN_GAP_BASE      = 6;   // min gap between node edges in ring mode (scaled dynamically)
   const RING_ANG_GAP = 60;  // folga angular entre nós vizinhos em anéis esparsos (mais "disposto")
+  // Rótulo (nome + cargo) abaixo do círculo é bem mais largo que o próprio círculo;
+  // usar só o diâmetro do nó para espaçamento faz labels vizinhos se sobreporem em
+  // anéis com muita gente. Estimativa de largura do rótulo renderizado.
+  const LABEL_FOOTPRINT_PX = 100;
   const RADIAL_GAP_BASE   = 50;  // folga radial base entre anéis (scaled dynamically)
   const LEVEL_BASE   = 3;   // visualR lookup: nodeRadii[level − LEVEL_BASE]
   const MAX_RING_R   = 1600; // raio máx. de um anel em modo anel; acima disso → modo coluna (40k)
+  // Mesmo sem estourar MAX_RING_R, um anel com muita gente vira um círculo
+  // grande e esparso em vez de compacto — acima desta contagem, agrupa em
+  // colunas independente do raio caber.
+  const RING_GROUP_THRESHOLD = 14;
   const LARGE_SECTOR = 40;   // a partir deste total de pessoas, espalha pela circunferência (passo uniforme)
-  const COL_DEPTH    = 10;  // max nodes per radial column
-  const COL_ROW_PX   = 52;  // radial distance between rows in a column (px)
+  const COL_COUNT = 7; // número fixo de colunas; grupo dividido o mais igual possível entre elas
+  const COL_ROW_PX   = 52;  // radial distance between rows in a column (px) — mínimo, ver LABEL_HEIGHT_PX
+  // Nome + cargo abaixo do círculo ocupam ~40px de altura; sem isso, linhas
+  // consecutivas de uma coluna ficam com o rótulo sobreposto ao próximo nó.
+  const LABEL_HEIGHT_PX = 40;
   const COL_GAP_PX   = 80;  // gap between innermost column row and parent ring
   const MIN_COL_ANG  = (6  * Math.PI) / 180; // minimum 6° between columns
   const MAX_COL_ANG  = (14 * Math.PI) / 180; // maximum 14° between columns
@@ -318,7 +329,8 @@ export function calculateEvenSectorLayout(
   // Raio mínimo p/ os nós de um anel caberem em volta da circunferência sem sobrepor.
   const ringMinR = (ringNodes: OrgNode[]): number => {
     const maxVR = Math.max(...ringNodes.map((n) => visualR(n)));
-    return (ringNodes.length * (2 * maxVR + MIN_GAP)) / PI2;
+    const footprint = Math.max(2 * maxVR, LABEL_FOOTPRINT_PX);
+    return (ringNodes.length * (footprint + MIN_GAP)) / PI2;
   };
   // Um anel "cabe em volta" se esse raio ≤ MAX_RING_R. Acima disso (40k) → modo coluna.
   const fitsAround = (ringNodes: OrgNode[]): boolean => ringMinR(ringNodes) <= MAX_RING_R;
@@ -395,9 +407,21 @@ export function calculateEvenSectorLayout(
 
   [...ringCollect.keys()].sort((a, b) => a - b).forEach((ring) => {
     const ringNodes  = ringCollect.get(ring)!;
-    const prevPlaced = placedByRing.get(ring - 1) ?? [];
-    const prevOuterR = outerRByRing.get(ring - 1) ?? dynamicRingR.get(ring - 1) ?? 0;
-    const useColumns = ring > 1 && !fitsAround(ringNodes) && prevPlaced.length > 0;
+    // Ring 1 não tem anel anterior — quando precisa agrupar em colunas, usa o
+    // próprio card do setor como "pai" único, abrindo um leque de 360°.
+    const prevPlacedRaw = placedByRing.get(ring - 1) ?? [];
+    const prevPlaced = (ring === 1 && prevPlacedRaw.length === 0)
+      ? [{ id: sectorId, angle: START }]
+      : prevPlacedRaw;
+    const prevOuterR = ring === 1
+      ? centerVR
+      : (outerRByRing.get(ring - 1) ?? dynamicRingR.get(ring - 1) ?? 0);
+    // Agrupa em colunas se o anel não cabe em volta (raio estouraria) OU se
+    // simplesmente tem gente demais para um único anel ficar compacto — mesma
+    // estratégia usada para setores grandes, já a partir do nível 1.
+    const useColumns =
+      (!fitsAround(ringNodes) || ringNodes.length > RING_GROUP_THRESHOLD) &&
+      prevPlaced.length > 0;
 
     const ringPlaced: Array<{ id: string; angle: number }> = [];
 
@@ -411,7 +435,8 @@ export function calculateEvenSectorLayout(
       //  • Setor pequeno → passo justo (ombro a ombro): nós unidos e próximos, em
       //    sequência horária a partir do topo, sem grandes vãos.
       const maxVR     = Math.max(...ringNodes.map((n) => visualR(n)));
-      const tightStep = (2 * maxVR + RING_ANG_GAP) / r;   // nós lado a lado, com folga p/ respirar
+      const footprint = Math.max(2 * maxVR, LABEL_FOOTPRINT_PX);
+      const tightStep = (footprint + RING_ANG_GAP) / r;   // nós lado a lado, com folga p/ respirar (inclui rótulo)
       const evenStep  = PI2 / ringNodes.length;           // volta inteira dividida
       const step      = sectorIsLarge ? evenStep : Math.min(evenStep, tightStep);
 
@@ -500,21 +525,51 @@ export function calculateEvenSectorLayout(
           Math.abs(nextA - norm(parentAngle)) / 2,
         );
 
-        const colCount  = Math.ceil(children.length / COL_DEPTH);
-        // Angle step between columns clamped to available arc and design limits
+        const colCount = Math.max(1, Math.min(COL_COUNT, children.length));
+        // Divide os filhos o mais igual possível entre as colunas (ex.: 23 em 7
+        // colunas → 4/4/3/3/3/3/3). As primeiras `extra` colunas levam 1 a mais
+        // que as demais.
+        const baseSize = Math.floor(children.length / colCount);
+        const extra    = children.length % colCount;
+        const colOffsets: number[] = [];
+        {
+          let acc = 0;
+          for (let c = 0; c < colCount; c++) {
+            colOffsets.push(acc);
+            acc += baseSize + (c < extra ? 1 : 0);
+          }
+        }
+        const colOf = (i: number): number => {
+          for (let c = colCount - 1; c >= 0; c--) {
+            if (i >= colOffsets[c]) return c;
+          }
+          return 0;
+        };
+
+        // Com um único "pai" (ex.: ring 1 saindo direto do card do setor) não há
+        // pai vizinho disputando ângulo — espalha as colunas pelo círculo inteiro
+        // em vez de espremer tudo no leque estreito (6-14°) pensado p/ múltiplos pais.
         const colAngStep = colCount > 1
-          ? Math.min(MAX_COL_ANG, Math.max(MIN_COL_ANG, (halfArc * 2 * 0.85) / (colCount - 1)))
+          ? (M === 1
+              ? PI2 / colCount
+              : Math.min(MAX_COL_ANG, Math.max(MIN_COL_ANG, (halfArc * 2 * 0.85) / (colCount - 1))))
           : 0;
 
         // colLast[col] = id of the last-placed node in that column (becomes next row's parent)
         const colLast = new Map<number, string>();
 
+        // Espaço radial entre linhas precisa caber o diâmetro do nó + o rótulo
+        // (nome + cargo) abaixo dele — caso contrário o rótulo de uma linha
+        // invade o próximo nó da coluna.
+        const maxChildVR = Math.max(...children.map((n) => visualR(n)));
+        const rowStep = Math.max(COL_ROW_PX, 2 * maxChildVR + LABEL_HEIGHT_PX);
+
         children.forEach((node, i) => {
-          const col = Math.floor(i / COL_DEPTH);
-          const row = i % COL_DEPTH;
+          const col = colOf(i);
+          const row = i - colOffsets[col];
 
           const colAngle = parentAngle + (col - (colCount - 1) / 2) * colAngStep;
-          const nodeR    = baseR + row * COL_ROW_PX;
+          const nodeR    = baseR + row * rowStep;
 
           // Row 0 connects to parent; subsequent rows connect to previous row
           const visualParentId = row === 0 ? parentId : (colLast.get(col) ?? parentId);
