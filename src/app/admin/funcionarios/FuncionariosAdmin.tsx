@@ -82,6 +82,123 @@ const IcoWarn = () => (
   </svg>
 );
 
+// ── Select pesquisável ────────────────────────────────────────────────────────
+interface SSOption { id: string; label: string; sub?: string }
+
+function SearchableSelect({
+  value, onChange, options, placeholder = 'Selecione…', searchPlaceholder = 'Buscar…',
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  options: SSOption[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+}) {
+  const [open, setOpen]   = useState(false);
+  const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(-1);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
+  const listRef   = useRef<HTMLUListElement>(null);
+
+  const selected = options.find(o => o.id === value);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return options;
+    return options.filter(o =>
+      o.label.toLowerCase().includes(q) || (o.sub ?? '').toLowerCase().includes(q),
+    );
+  }, [options, query]);
+
+  // Fecha ao clicar fora
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false); setQuery(''); setFocused(-1);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  // Foca input ao abrir
+  useEffect(() => {
+    if (open) { setFocused(-1); setTimeout(() => inputRef.current?.focus(), 10); }
+  }, [open]);
+
+  // Scroll do item focado
+  useEffect(() => {
+    if (focused < 0 || !listRef.current) return;
+    const el = listRef.current.children[focused] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [focused]);
+
+  const pick = (id: string) => { onChange(id); setOpen(false); setQuery(''); setFocused(-1); };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { setOpen(false); setQuery(''); setFocused(-1); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setFocused(i => Math.min(i + 1, filtered.length - 1)); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setFocused(i => Math.max(i - 1, -1)); }
+    if (e.key === 'Enter' && focused >= 0 && filtered[focused]) { e.preventDefault(); pick(filtered[focused].id); }
+  };
+
+  return (
+    <div ref={wrapRef} className={styles.ssWrap}>
+      <button
+        type="button"
+        className={styles.ssTrigger}
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected
+          ? <span className={styles.ssTriggerLabel}>{selected.label}</span>
+          : <span className={styles.ssTriggerPlaceholder}>{placeholder}</span>}
+        <IcoChevron open={open} />
+      </button>
+
+      {open && (
+        <div className={styles.ssDropdown}>
+          <div className={styles.ssSearchWrap}>
+            <IcoSearch />
+            <input
+              ref={inputRef}
+              className={styles.ssSearchInput}
+              placeholder={searchPlaceholder}
+              value={query}
+              onChange={e => { setQuery(e.target.value); setFocused(-1); }}
+              onKeyDown={onKeyDown}
+            />
+          </div>
+          <ul ref={listRef} className={styles.ssList} role="listbox">
+            {filtered.length === 0
+              ? <li className={styles.ssEmpty}>Nenhum resultado</li>
+              : filtered.map((o, i) => (
+                <li
+                  key={o.id}
+                  role="option"
+                  aria-selected={o.id === value}
+                  className={[
+                    styles.ssItem,
+                    o.id === value  ? styles.ssItemSelected  : '',
+                    i === focused   ? styles.ssItemFocused   : '',
+                  ].join(' ')}
+                  onMouseDown={() => pick(o.id)}
+                  onMouseEnter={() => setFocused(i)}
+                >
+                  {o.label}
+                  {o.sub && <span style={{ marginLeft: 6, opacity: .55, fontSize: 11 }}>{o.sub}</span>}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Seção collapsível ─────────────────────────────────────────────────────────
 function Section({
   icon, title, badge, open, onToggle, sectionId, children,
@@ -269,13 +386,16 @@ function FuncionarioDrawer({
 
             <div className={styles.field}>
               <label className={styles.label}>Cargo <span className={styles.required}>*</span></label>
-              <select className={styles.select} value={form.id_cargo}
-                onChange={e => setForm(f => ({ ...f, id_cargo: e.target.value, parent_node_id: '' }))}>
-                <option value="">Selecione o cargo</option>
-                {cargos.filter(c => c.ativo).map(c => (
-                  <option key={c.id} value={c.id}>Nv {c.nvl_permissao} · {c.nome}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={form.id_cargo}
+                onChange={id => setForm(f => ({ ...f, id_cargo: id, parent_node_id: '' }))}
+                options={cargos.filter(c => c.ativo).map(c => ({
+                  id: c.id,
+                  label: `Nv ${c.nvl_permissao} · ${c.nome}`,
+                }))}
+                placeholder="Selecione o cargo"
+                searchPlaceholder="Buscar cargo…"
+              />
             </div>
 
             {selectedCargo && (
@@ -292,26 +412,32 @@ function FuncionarioDrawer({
 
             <div className={styles.field}>
               <label className={styles.label}>Setor <span className={styles.required}>*</span></label>
-              <select className={styles.select} value={form.id_setor}
-                onChange={e => setForm(f => ({ ...f, id_setor: e.target.value, parent_node_id: '' }))}>
-                <option value="">Selecione o setor</option>
-                {setores.filter(s => s.ativo).map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.parent_id ? '↳ ' : ''}{s.nome}{s.sigla ? ` (${s.sigla})` : ''}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={form.id_setor}
+                onChange={id => setForm(f => ({ ...f, id_setor: id, parent_node_id: '' }))}
+                options={setores.filter(s => s.ativo).map(s => ({
+                  id: s.id,
+                  label: `${s.parent_id ? '↳ ' : ''}${s.nome}`,
+                  sub: s.sigla ?? undefined,
+                }))}
+                placeholder="Selecione o setor"
+                searchPlaceholder="Buscar setor…"
+              />
             </div>
 
             <div className={styles.field}>
               <label className={styles.label}>Unidade <span className={styles.required}>*</span></label>
-              <select className={styles.select} value={form.id_unidade}
-                onChange={e => setForm(f => ({ ...f, id_unidade: e.target.value }))}>
-                <option value="">Selecione a unidade</option>
-                {unidades.map(u => (
-                  <option key={u.id} value={u.id}>{u.nome_fantasia} ({u.tipo_unidade})</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={form.id_unidade}
+                onChange={id => setForm(f => ({ ...f, id_unidade: id }))}
+                options={unidades.map(u => ({
+                  id: u.id,
+                  label: u.nome_fantasia,
+                  sub: u.tipo_unidade,
+                }))}
+                placeholder="Selecione a unidade"
+                searchPlaceholder="Buscar unidade…"
+              />
             </div>
 
             {!isDirector && (() => {
@@ -572,9 +698,11 @@ export default function FuncionariosAdmin() {
   const [unidades,     setUnidades]     = useState<Unidade[]>([]);
   const [loading,      setLoading]      = useState(true);
 
-  const [search,  setSearch]  = useState('');
-  const [fSetor,  setFSetor]  = useState('');
-  const [fCargo,  setFCargo]  = useState('');
+  const [search,    setSearch]    = useState('');
+  const [fSetor,    setFSetor]    = useState('');
+  const [fCargo,    setFCargo]    = useState('');
+  const [sortField, setSortField] = useState<'nome' | 'nivel' | 'setor' | 'unidade'>('nome');
+  const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('asc');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing,    setEditing]    = useState<Funcionario | null>(null);
@@ -635,8 +763,21 @@ export default function FuncionariosAdmin() {
         (f.setor_nome ?? '').toLowerCase().includes(q)
       );
     }
-    return list;
-  }, [funcionarios, search, fSetor, fCargo, validSetorIds]);
+    const d = sortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      switch (sortField) {
+        case 'nivel':   return ((a.cargo_nvl ?? 99) - (b.cargo_nvl ?? 99)) * d;
+        case 'setor':   return (a.setor_nome ?? '').localeCompare(b.setor_nome ?? '') * d;
+        case 'unidade': return (a.unidade_nome ?? '').localeCompare(b.unidade_nome ?? '') * d;
+        default:        return a.nome_completo.localeCompare(b.nome_completo) * d;
+      }
+    });
+  }, [funcionarios, search, fSetor, fCargo, validSetorIds, sortField, sortDir]);
+
+  function toggleSort(field: typeof sortField) {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  }
 
   function openNew() {
     setEditing(null);
@@ -893,12 +1034,22 @@ export default function FuncionariosAdmin() {
           </button>
         </div>
 
-        {/* Cabeçalho da tabela */}
+        {/* Cabeçalho da tabela — clique na coluna para ordenar */}
         <div className={styles.tableHead}>
-          <span className={styles.tableHeadCell}>Funcionário</span>
-          <span className={styles.tableHeadCell}>Cargo</span>
-          <span className={styles.tableHeadCell}>Setor</span>
-          <span className={styles.tableHeadCell}>Unidade</span>
+          {([ ['nome', 'Funcionário'], ['nivel', 'Cargo'], ['setor', 'Setor'], ['unidade', 'Unidade'] ] as const).map(([field, label]) => (
+            <button
+              key={field}
+              type="button"
+              className={styles.tableHeadCell}
+              onClick={() => toggleSort(field)}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 3, color: sortField === field ? 'var(--text-secondary)' : undefined }}
+            >
+              {label}
+              <span style={{ fontSize: 9, opacity: sortField === field ? 1 : 0.25, lineHeight: 1 }}>
+                {sortDir === 'asc' ? '▲' : '▼'}
+              </span>
+            </button>
+          ))}
           <span className={styles.tableHeadCell}>Contrato</span>
           <span className={styles.tableHeadCell}></span>
         </div>

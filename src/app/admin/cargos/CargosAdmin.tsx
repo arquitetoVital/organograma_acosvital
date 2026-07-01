@@ -28,8 +28,10 @@ export default function CargosAdmin() {
   const [loading, setLoading] = useState(
     () => !isCacheHit(CACHE_KEYS.ADMIN_CARGOS, CACHE_TTL.ADMIN),
   );
-  const [search,  setSearch]  = useState('');
-  const [filter,  setFilter]  = useState<'todos' | 'ativos' | 'inativos'>('ativos');
+  const [search,   setSearch]   = useState('');
+  const [filter,   setFilter]   = useState<'todos' | 'ativos' | 'inativos'>('ativos');
+  const [sortField, setSortField] = useState<'nivel' | 'nome'>('nivel');
+  const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('asc');
   const [form,    setForm]    = useState(BLANK);
   const [editing, setEditing] = useState<Cargo | null>(null);
   const [saving,  setSaving]  = useState(false);
@@ -69,8 +71,13 @@ export default function CargosAdmin() {
         String(c.nvl_permissao).includes(q)
       );
     }
-    return [...list].sort((a, b) => a.nvl_permissao - b.nvl_permissao);
-  }, [cargos, search, filter]);
+    const d = sortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) =>
+      sortField === 'nivel'
+        ? (a.nvl_permissao - b.nvl_permissao) * d
+        : a.nome.localeCompare(b.nome) * d,
+    );
+  }, [cargos, search, filter, sortField, sortDir]);
 
   function startEdit(c: Cargo) {
     setEditing(c);
@@ -246,6 +253,26 @@ export default function CargosAdmin() {
               <option value="ativos">Ativos</option>
               <option value="inativos">Inativos</option>
             </select>
+
+            <select
+              className={styles.filterSelect}
+              value={sortField}
+              onChange={e => setSortField(e.target.value as typeof sortField)}
+              title="Ordenar por"
+            >
+              <option value="nivel">Nível</option>
+              <option value="nome">Nome</option>
+            </select>
+
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              title={sortDir === 'asc' ? 'Ordem crescente — clique para decrescente' : 'Ordem decrescente — clique para crescente'}
+              style={{ width: 32, height: 32, fontSize: 14, flexShrink: 0 }}
+            >
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
           </div>
 
           <div className={styles.list}>
