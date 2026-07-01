@@ -248,17 +248,37 @@ export default function OrgChart({
   // ── Sector detail layout (computed client-side) ────────────────────────
   const sectorDetail = useMemo(() => {
     if (!activeSectorId) return null;
-    const subtree = getSubtree(activeSectorId, mergedNodes);
-    // Compressed level→ring mapping: only present levels get consecutive rings.
-    // Dynamic radii ensure nodes never overlap when a level has many people.
+    let subtree = getSubtree(activeSectorId, mergedNodes);
+
+    // Hub-and-spoke: if sector has a manager (lowest-level non-sector direct child)
+    // AND direct sub-sectors, place manager at ring 1 and sub-sectors at ring 2.
+    // Lines from manager to each sub-sector are replaced in the SVG by a ring circle
+    // + a single spoke, matching the GM→sectors overview design.
+    const directNonSectors = subtree.filter((n) => n.parentId === activeSectorId && !n.isSector);
+    const directSubSectors = subtree.filter((n) => n.parentId === activeSectorId && n.isSector);
+    const topManager = directNonSectors.reduce<typeof directNonSectors[0] | null>(
+      (best, n) => (!best || n.level < best.level ? n : best),
+      null,
+    );
+
+    let hubManagerId: string | undefined;
+    let subSectorRing: number | undefined;
+
+    if (topManager && directSubSectors.length > 0) {
+      hubManagerId = topManager.id;
+      subSectorRing = 2;
+      // Re-parent sub-sectors to the manager so calculateConnections draws
+      // manager→sub-sector edges (which we later replace with the ring visual).
+      subtree = subtree.map((n) =>
+        n.parentId === activeSectorId && n.isSector ? { ...n, parentId: topManager.id } : n,
+      );
+    }
+
     const pos = calculateEvenSectorLayout(
-      subtree,
-      activeSectorId,
-      SECTOR_RING_RADII,
-      SECTOR_NODE_RADIUS,
+      subtree, activeSectorId, SECTOR_RING_RADII, SECTOR_NODE_RADIUS, subSectorRing,
     );
     const conn = calculateConnections(pos);
-    return { pos, conn };
+    return { pos, conn, hubManagerId };
   }, [activeSectorId, mergedNodes]);
 
   // Animate viewBox when switching views — fit to content for sector detail
@@ -361,6 +381,17 @@ export default function OrgChart({
     () => sectorDetail?.conn.filter((c) => visibleDetailIds.has(c.toId)) ?? [],
     [sectorDetail, visibleDetailIds],
   );
+
+  // Hub-and-spoke ring info — derived from positioned nodes when a manager+sub-sectors
+  // layout is active. Used to draw the ring circle and single spoke in the SVG.
+  const hubInfo = useMemo(() => {
+    if (!sectorDetail?.hubManagerId) return null;
+    const managerPos = sectorDetail.pos.find((p) => p.id === sectorDetail.hubManagerId);
+    const subSectorPos = sectorDetail.pos.find((p) => p.isSector && p.id !== activeSectorId);
+    if (!managerPos || !subSectorPos) return null;
+    const ringR = Math.sqrt(subSectorPos.x ** 2 + subSectorPos.y ** 2);
+    return { managerId: sectorDetail.hubManagerId, managerPos, ringR };
+  }, [sectorDetail, activeSectorId]);
 
   const detailSubSectors = useMemo(
     () => visibleDetailOthers.filter((n) => n.isSector),
@@ -1718,7 +1749,58 @@ export default function OrgChart({
               {/* ── SECTOR DETAIL MODE ────────────────────────────────────── */}
               {activeSectorId && sectorDetail && detailCenter && (
                 <g key={activeSectorId} className={styles.contentGroup}>
-                  {renderConnections(visibleDetailConn)}
+                  {/* Normal connections — manager→sub-sector edges are suppressed when
+                      hub-and-spoke is active (replaced below by ring circle + spoke). */}
+                  {renderConnections(
+                    hubInfo
+                      ? visibleDetailConn.filter((c) => {
+                          if (c.fromId !== hubInfo.managerId) return true;
+                          return !sectorDetail.pos.find((p) => p.id === c.toId)?.isSector;
+                        })
+                      : visibleDetailConn,
+                  )}
+
+                  {/* Hub-and-spoke: ring circle at sub-sector radius + single spoke
+                      from manager outward to the ring, connecting all sub-sectors
+                      visually without individual per-sub-sector lines. */}
+                  {hubInfo && (() => {
+                    const { managerPos, ringR } = hubInfo;
+                    const mx = managerPos.x;
+                    const my = managerPos.y;
+                    const dist = Math.sqrt(mx * mx + my * my);
+                    const ux = dist > 0 ? mx / dist : 0;
+                    const uy = dist > 0 ? my / dist : -1;
+                    const spokeStartX = mx + ux * managerPos.radius;
+                    const spokeStartY = my + uy * managerPos.radius;
+                    const spokeEndX   = ux * ringR;
+                    const spokeEndY   = uy * ringR;
+                    const col = detailCenter.sectorColor ?? '#4e9af1';
+                    return (
+                      <g>
+                        {/* Circular ring connecting all sub-sectors */}
+                        <circle
+                          cx={0}
+                          cy={0}
+                          r={ringR}
+                          fill="none"
+                          stroke={col}
+                          strokeOpacity={0.45}
+                          strokeWidth={1.5}
+                          strokeDasharray="6 4"
+                        />
+                        {/* Single spoke from manager to the ring */}
+                        <line
+                          x1={spokeStartX}
+                          y1={spokeStartY}
+                          x2={spokeEndX}
+                          y2={spokeEndY}
+                          stroke={col}
+                          strokeOpacity={0.7}
+                          strokeWidth={1.5}
+                        />
+                      </g>
+                    );
+                  })()}
 
                   {/* People nodes */}
                   {detailPeopleNodes.map((node) => {
