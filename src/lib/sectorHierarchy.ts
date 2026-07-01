@@ -12,16 +12,31 @@ function computeParents(
   sectorId: string,
 ): Map<string, string> {
   const eligible = employees.filter(e => e.nvl >= MIN_SECTOR_LEVEL);
-  const sorted   = [...eligible].sort((a, b) => a.nvl - b.nvl || a.id.localeCompare(b.id));
   const result   = new Map<string, string>();
 
-  for (const emp of sorted) {
-    // Superior imediato = pessoa com o maior nvl que ainda seja MENOR que o do funcionário
-    const superiors = sorted.filter(e => e.nvl < emp.nvl);
-    result.set(
-      emp.id,
-      superiors.length > 0 ? superiors[superiors.length - 1].id : sectorId,
-    );
+  // Agrupa por nível; dentro de cada nível ordena por id para determinismo
+  const byLevel = new Map<number, Array<{ id: string; nvl: number }>>();
+  for (const e of eligible) {
+    if (!byLevel.has(e.nvl)) byLevel.set(e.nvl, []);
+    byLevel.get(e.nvl)!.push(e);
+  }
+  for (const group of byLevel.values()) group.sort((a, b) => a.id.localeCompare(b.id));
+
+  // Níveis em ordem crescente: menor nvl = cargo mais alto
+  const levels = [...byLevel.keys()].sort((a, b) => a - b);
+
+  for (let i = 0; i < levels.length; i++) {
+    const group     = byLevel.get(levels[i])!;
+    // Superior imediato = nível anterior na lista (o mais próximo acima)
+    const superiors = i > 0 ? byLevel.get(levels[i - 1])! : [];
+
+    if (superiors.length === 0) {
+      // Nível mais alto do setor → reporta direto ao setor
+      for (const emp of group) result.set(emp.id, sectorId);
+    } else {
+      // Distribui em round-robin para equilibrar a carga entre os superiores
+      group.forEach((emp, idx) => result.set(emp.id, superiors[idx % superiors.length].id));
+    }
   }
 
   return result;
