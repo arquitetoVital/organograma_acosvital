@@ -187,6 +187,93 @@
 .textarea { resize: vertical; min-height: 72px; }
 .select { cursor: pointer; }
 
+/* ── SearchableSelect ──────────────────────────────────────────────────────── */
+.ssWrap { position: relative; }
+
+.ssTrigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13.5px;
+  padding: 9px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: border-color .15s, background .15s, box-shadow .15s;
+  min-height: 0;
+}
+.ssTrigger:hover { border-color: var(--border-light); }
+.ssTrigger[aria-expanded="true"],
+.ssTrigger:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+  outline: none;
+}
+.ssTriggerLabel { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssTriggerPlaceholder { flex: 1; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ssDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  z-index: 300;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
+  overflow: hidden;
+}
+
+.ssSearchWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.ssSearchInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: var(--font-sans);
+  min-width: 0;
+}
+.ssSearchInput::placeholder { color: var(--text-faint); }
+
+.ssList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.ssItem {
+  padding: 7px 13px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background .1s;
+  line-height: 1.4;
+}
+.ssItem:hover,
+.ssItemFocused { background: rgba(255,255,255,.05); }
+.ssItemSelected { background: rgba(59,130,246,.13); color: var(--accent-text); font-weight: 600; }
+.ssItemSelected:hover { background: rgba(59,130,246,.18); }
+.ssEmpty { padding: 12px 13px; font-size: 12px; color: var(--text-faint); text-align: center; }
+
 /* Linhas de campos */
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }

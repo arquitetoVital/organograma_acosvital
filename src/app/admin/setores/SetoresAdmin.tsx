@@ -20,9 +20,9 @@ const BLANK = {
 };
 type SetorForm = typeof BLANK;
 
-function buildTree(setores: Setor[]): Setor[] {
-  const roots = setores.filter(s => !s.parent_id);
-  const childrenOf = (id: string) => setores.filter(s => s.parent_id === id);
+function buildTree(setores: Setor[], cmp: (a: Setor, b: Setor) => number): Setor[] {
+  const roots = [...setores.filter(s => !s.parent_id)].sort(cmp);
+  const childrenOf = (id: string) => [...setores.filter(s => s.parent_id === id)].sort(cmp);
   const flatten = (list: Setor[]): Setor[] =>
     list.flatMap(s => [s, ...flatten(childrenOf(s.id))]);
   return flatten(roots);
@@ -33,8 +33,10 @@ export default function SetoresAdmin() {
   const [loading,  setLoading]  = useState(
     () => !isCacheHit(CACHE_KEYS.ADMIN_SETORES, CACHE_TTL.ADMIN),
   );
-  const [search,   setSearch]   = useState('');
-  const [filter,   setFilter]   = useState<'todos' | 'ativos' | 'inativos'>('ativos');
+  const [search,    setSearch]    = useState('');
+  const [filter,    setFilter]    = useState<'todos' | 'ativos' | 'inativos'>('ativos');
+  const [sortField, setSortField] = useState<'codigo' | 'nome'>('codigo');
+  const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('asc');
   const [form,     setForm]     = useState<SetorForm>(BLANK);
   const [editing,  setEditing]  = useState<Setor | null>(null);
   const [saving,   setSaving]   = useState(false);
@@ -79,8 +81,13 @@ export default function SetoresAdmin() {
         (s.codigo_setor ?? '').toLowerCase().includes(q)
       );
     }
-    return buildTree(list);
-  }, [setores, search, filter]);
+    const d = sortDir === 'asc' ? 1 : -1;
+    const cmp = (a: Setor, b: Setor) =>
+      sortField === 'codigo'
+        ? ((a.codigo_setor ?? '') < (b.codigo_setor ?? '') ? -1 : (a.codigo_setor ?? '') > (b.codigo_setor ?? '') ? 1 : 0) * d
+        : a.nome.localeCompare(b.nome) * d;
+    return buildTree(list, cmp);
+  }, [setores, search, filter, sortField, sortDir]);
 
   function startEdit(s: Setor) {
     setEditing(s);
@@ -293,6 +300,26 @@ export default function SetoresAdmin() {
               <option value="ativos">Ativos</option>
               <option value="inativos">Inativos</option>
             </select>
+
+            <select
+              className={styles.filterSelect}
+              value={sortField}
+              onChange={e => setSortField(e.target.value as typeof sortField)}
+              title="Ordenar por"
+            >
+              <option value="codigo">Código</option>
+              <option value="nome">Nome</option>
+            </select>
+
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              title={sortDir === 'asc' ? 'Ordem crescente — clique para decrescente' : 'Ordem decrescente — clique para crescente'}
+              style={{ width: 32, height: 32, fontSize: 14, flexShrink: 0 }}
+            >
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
           </div>
 
           <div className={styles.list}>
