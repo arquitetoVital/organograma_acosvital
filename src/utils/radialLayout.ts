@@ -243,6 +243,7 @@ export function calculateEvenSectorLayout(
   sectorId: string,
   ringRadii: Record<number, number> = SECTOR_RING_RADII,
   nodeRadii: Record<number, number> = SECTOR_NODE_RADIUS,
+  subSectorRing?: number,
 ): PositionedNode[] {
   const START = -Math.PI / 2;
   const PI2   = 2 * Math.PI;
@@ -286,8 +287,12 @@ export function calculateEvenSectorLayout(
   });
 
   // ── Mark descendants of direct sub-sectors as hidden (drill-down) ──
+  // When subSectorRing is set, sub-sectors may have been re-parented to a manager node,
+  // so we find all non-root isSector nodes instead of only direct children of sectorId.
   const directSubSectorIds = new Set(
-    (childrenOf.get(sectorId) ?? []).filter((n) => n.isSector).map((n) => n.id),
+    subSectorRing != null
+      ? nodes.filter((n) => n.id !== sectorId && n.isSector).map((n) => n.id)
+      : (childrenOf.get(sectorId) ?? []).filter((n) => n.isSector).map((n) => n.id),
   );
   const hiddenIds = new Set<string>();
   function markHidden(id: string) {
@@ -309,9 +314,15 @@ export function calculateEvenSectorLayout(
   }
   collectLevels(sectorId);
   const levelToRing = new Map(
-    [...presentLevels].sort((a, b) => a - b).map((lvl, i) => [lvl, i + 1]),
+    [...presentLevels].sort((a, b) => a - b).map((lvl, i) => {
+      // When subSectorRing is reserved for isSector nodes, bump employee rings that
+      // would collide with it so they land in a higher ring instead.
+      let ring = i + 1;
+      if (subSectorRing != null && ring >= subSectorRing) ring += 1;
+      return [lvl, ring];
+    }),
   );
-  const getRing = (n: OrgNode) => n.isSector ? 1 : (levelToRing.get(n.level) ?? 1);
+  const getRing = (n: OrgNode) => n.isSector ? (subSectorRing ?? 1) : (levelToRing.get(n.level) ?? 1);
 
   // ── Collect visible nodes per ring in DFS order ──
   const ringCollect = new Map<number, OrgNode[]>();
@@ -410,9 +421,20 @@ export function calculateEvenSectorLayout(
     // Ring 1 não tem anel anterior — quando precisa agrupar em colunas, usa o
     // próprio card do setor como "pai" único, abrindo um leque de 360°.
     const prevPlacedRaw = placedByRing.get(ring - 1) ?? [];
-    const prevPlaced = (ring === 1 && prevPlacedRaw.length === 0)
-      ? [{ id: sectorId, angle: START }]
-      : prevPlacedRaw;
+    let prevPlaced: Array<{ id: string; angle: number }>;
+    if (ring === 1 && prevPlacedRaw.length === 0) {
+      prevPlaced = [{ id: sectorId, angle: START }];
+    } else if (prevPlacedRaw.length === 0) {
+      // Ring gap (e.g. subSectorRing skips a ring) — walk back to find nearest non-empty ring
+      let found: Array<{ id: string; angle: number }> = [];
+      for (let r = ring - 1; r >= 1; r--) {
+        const p = placedByRing.get(r);
+        if (p && p.length > 0) { found = p; break; }
+      }
+      prevPlaced = found.length > 0 ? found : [{ id: sectorId, angle: START }];
+    } else {
+      prevPlaced = prevPlacedRaw;
+    }
     const prevOuterR = ring === 1
       ? centerVR
       : (outerRByRing.get(ring - 1) ?? dynamicRingR.get(ring - 1) ?? 0);
