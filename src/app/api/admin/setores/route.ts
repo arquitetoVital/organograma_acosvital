@@ -45,6 +45,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Campos obrigatórios: nome, descricao.' }, { status: 400 });
   }
 
+  // Nível hierárquico do setor: sub-setor = nível do pai + 1; setor raiz = 2
+  // (a vw_org_nodes usa esse valor como "level" — sem ele, sub-setores ficam
+  // com o mesmo nível dos setores raiz e aparecem soltos na visão geral em vez
+  // de aninhados dentro do setor-pai).
+  let nivel = 2;
+  if (b.parent_id) {
+    try {
+      const setores = await fetchAllPages<{ id: string; nivel: number | null }>('/setores', 'setores');
+      const parent = setores.find(s => s.id === String(b.parent_id));
+      nivel = (parent?.nivel ?? 2) + 1;
+    } catch { nivel = 3; }
+  }
+
   // 1. Cria o setor na API de RH
   let setorData: { id: string };
   try {
@@ -53,6 +66,7 @@ export async function POST(request: NextRequest) {
       descricao:    String(b.descricao).trim(),
       ativo:        b.ativo !== false,
       parent_id:    b.parent_id    || null,
+      nivel,
       sigla:        b.sigla        ? String(b.sigla).trim().toUpperCase() : null,
       cor_setor:    b.cor_setor    || null,
       codigo_setor: b.codigo_setor ? String(b.codigo_setor).trim().toUpperCase() : null,

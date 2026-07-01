@@ -165,9 +165,16 @@ export default function OrgChart({
   }, [allNodes, extraNodes]);
 
   // BFS: busca todos os descendentes de um nó via /api/org?parent_id=
+  // `inFlightParentIds` evita disparos duplicados simultâneos (BFS + efeito da
+  // Lista podem pedir o mesmo parentId ao mesmo tempo). `loadedParentIds` só é
+  // marcado em caso de SUCESSO com filhos encontrados — uma resposta vazia ou
+  // uma falha de rede não "envenenam" o cache, então um setor que estava vazio
+  // (sem filhos ainda) é corretamente re-tentado da próxima vez que for aberto,
+  // ao invés de ficar travado em "0 filhos" para sempre.
+  const inFlightParentIds = useRef(new Set<string>());
   const fetchChildren = useCallback(async (parentId: string): Promise<void> => {
-    if (loadedParentIds.current.has(parentId)) return;
-    loadedParentIds.current.add(parentId);
+    if (loadedParentIds.current.has(parentId) || inFlightParentIds.current.has(parentId)) return;
+    inFlightParentIds.current.add(parentId);
     try {
       const res = await fetch(
         `/api/org?parent_id=${encodeURIComponent(parentId)}`,
@@ -175,6 +182,7 @@ export default function OrgChart({
       if (!res.ok) return;
       const nodes: OrgNode[] = await res.json();
       if (!Array.isArray(nodes) || nodes.length === 0) return;
+      loadedParentIds.current.add(parentId);
       setExtraNodes((prev) => {
         const seen = new Set(prev.map((n) => n.id));
         const fresh = nodes.filter((n) => !seen.has(n.id));
@@ -184,8 +192,24 @@ export default function OrgChart({
       await Promise.all(nodes.map((n) => fetchChildren(n.id)));
     } catch {
       /* best-effort */
+    } finally {
+      inFlightParentIds.current.delete(parentId);
     }
   }, []);
+
+  // A view "Mapa" só carrega o detalhe de um setor sob demanda (clique → fetchChildren).
+  // A "Lista" precisa mostrar todo mundo de cara, então ao trocar para ela disparamos
+  // o BFS para cada setor presente no payload inicial (fetchChildren já recursa para
+  // os descendentes, então isso carrega a árvore inteira).
+  useEffect(() => {
+    if (viewMode !== 'tree') return;
+    allNodes
+      .filter((n) => n.isSector)
+      .forEach((n) => {
+        const canonId = n.id.startsWith('sec-') ? n.id.slice(4) : n.id;
+        fetchChildren(canonId);
+      });
+  }, [viewMode, allNodes, fetchChildren]);
 
   const openSector = useCallback(
     (id: string) => {
@@ -1281,9 +1305,9 @@ export default function OrgChart({
     svgRef.current?.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
   }, [mounted]);
 
-  // Modo fullscreen: 'clean' oculta texto dos nós
+  // Nomes/cargos sempre visíveis, em qualquer modo (TV e tela cheia normal).
   const fsMode   = useFsMode();
-  const hideText = fsMode === 'clean';
+  const hideText = false;
 
   // ── Tier 3: tilt 3D sutil seguindo o mouse ────────────────────────────
   // Atualiza o transform diretamente no DOM — sem setState para evitar re-renders.
@@ -1341,7 +1365,7 @@ export default function OrgChart({
       className={`${styles.wrapper} ${styles.wrapperLoaded}`}
     >
       {/* ── Barra: alternância de modo (Mapa/Lista) + busca ─────────── */}
-      <div className={styles.toolbar}>
+      <div className={`${styles.toolbar} ${fsMode !== 'none' ? styles.shifted : ''}`}>
         <div className={styles.segmented}>
           <button
             type="button"
@@ -1769,6 +1793,7 @@ export default function OrgChart({
               positions={positions}
               vb={vb}
               levelColors={levelColors}
+              shifted={fsMode !== 'none'}
               onJump={(wx, wy) => {
                 const c = vbRef.current;
                 setVb({ x: wx - c.w / 2, y: wy - c.h / 2, w: c.w, h: c.h });
@@ -1823,10 +1848,11 @@ interface MiniMapProps {
   vb: ViewBox;
   levelColors: Record<number, string>;
   onJump: (worldX: number, worldY: number) => void;
+  shifted?: boolean;
 }
 
 /** Mini-mapa de orientação: pontos dos nós + retângulo do viewport atual. */
-function MiniMap({ positions, vb, levelColors, onJump }: MiniMapProps) {
+function MiniMap({ positions, vb, levelColors, onJump, shifted = false }: MiniMapProps) {
   const S = 150; // tamanho do mini-mapa em px
   const D = 1000; // domínio do mundo: -500..500
   const k = S / D;
@@ -1841,7 +1867,7 @@ function MiniMap({ positions, vb, levelColors, onJump }: MiniMapProps) {
   };
 
   return (
-    <div className={styles.minimap}>
+    <div className={`${styles.minimap} ${shifted ? styles.shifted : ''}`}>
       <svg
         viewBox={`0 0 ${S} ${S}`}
         className={styles.minimapSvg}

@@ -127,10 +127,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...funcData }, { status: 201 });
   }
 
-  // Determina o parent_id do nó no organograma via hierarquia automática do setor.
-  // Níveis 0-1 (Diretor/GM) são sempre raízes; demais são calculados pelo setor.
+  // Determina o parent_id do nó no organograma.
+  // Prioridade: parent_node_id explícito > hierarquia automática > setor.
   let orgParentId: string | null = null;
-  if (cargoNvl <= 1) {
+  if (b.parent_node_id && typeof b.parent_node_id === 'string') {
+    orgParentId = b.parent_node_id;
+  } else if (cargoNvl <= 1) {
     orgParentId = null;
   } else {
     try {

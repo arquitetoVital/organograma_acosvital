@@ -157,6 +157,7 @@ interface DrawerProps {
   cargos: Cargo[];
   setores: Setor[];
   unidades: Unidade[];
+  funcionarios: Funcionario[];
   saving: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
@@ -164,11 +165,12 @@ interface DrawerProps {
 }
 
 function FuncionarioDrawer({
-  form, setForm, editing, cargos, setores, unidades,
+  form, setForm, editing, cargos, setores, unidades, funcionarios,
   saving, onClose, onSubmit, onDelete,
 }: DrawerProps) {
   const [openSection, setOpenSection] = useState<string>('dados');
   const toggle = (k: string) => setOpenSection(cur => cur === k ? '' : k);
+  const [reportsToSearch, setReportsToSearch] = useState('');
 
   // Fechar com Escape (keyboard accessibility)
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -291,7 +293,7 @@ function FuncionarioDrawer({
             <div className={styles.field}>
               <label className={styles.label}>Setor <span className={styles.required}>*</span></label>
               <select className={styles.select} value={form.id_setor}
-                onChange={e => setForm(f => ({ ...f, id_setor: e.target.value }))}>
+                onChange={e => setForm(f => ({ ...f, id_setor: e.target.value, parent_node_id: '' }))}>
                 <option value="">Selecione o setor</option>
                 {setores.filter(s => s.ativo).map(s => (
                   <option key={s.id} value={s.id}>
@@ -311,6 +313,60 @@ function FuncionarioDrawer({
                 ))}
               </select>
             </div>
+
+            {!isDirector && (() => {
+              const cargoMap = new Map(cargos.map(c => [c.id, c]));
+              const candidatos = funcionarios
+                .filter(f => f.id !== editing?.id && f.id_setor === form.id_setor)
+                .sort((a, b) => {
+                  const na = cargoMap.get(a.id_cargo)?.nvl_permissao ?? 9;
+                  const nb = cargoMap.get(b.id_cargo)?.nvl_permissao ?? 9;
+                  return na - nb || a.nome_completo.localeCompare(b.nome_completo);
+                });
+              const q = reportsToSearch.toLowerCase();
+              const filtrados = q
+                ? candidatos.filter(f =>
+                    f.nome_completo.toLowerCase().includes(q) ||
+                    (f.cargo_nome ?? '').toLowerCase().includes(q)
+                  )
+                : candidatos;
+              return (
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    Reporta a{' '}
+                    <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(opcional)</span>
+                  </label>
+                  {candidatos.length > 5 && (
+                    <input
+                      className={styles.input}
+                      style={{ marginBottom: 4 }}
+                      placeholder="Buscar gestor…"
+                      value={reportsToSearch}
+                      onChange={e => setReportsToSearch(e.target.value)}
+                    />
+                  )}
+                  <select
+                    className={styles.select}
+                    value={form.parent_node_id}
+                    onChange={e => setForm(f => ({ ...f, parent_node_id: e.target.value }))}
+                  >
+                    <option value="">— Automático pelo setor</option>
+                    {filtrados.map(f => {
+                      const nvl = cargoMap.get(f.id_cargo)?.nvl_permissao;
+                      const cargo = f.cargo_nome ?? cargoMap.get(f.id_cargo)?.nome ?? '';
+                      return (
+                        <option key={f.id} value={f.id}>
+                          {nvl !== undefined ? `Nv${nvl} · ` : ''}{f.nome_completo}{cargo ? ` — ${cargo}` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2, display: 'block' }}>
+                    Deixe em branco para hierarquia automática.
+                  </span>
+                </div>
+              );
+            })()}
 
             <div className={styles.field}>
               <label className={styles.label}>URL da foto</label>
@@ -979,7 +1035,7 @@ export default function FuncionariosAdmin() {
         <FuncionarioDrawer
           form={form} setForm={setForm}
           editing={editing} cargos={cargos} setores={setores}
-          unidades={unidades}
+          unidades={unidades} funcionarios={funcionarios}
           saving={saving} onClose={closeDrawer}
           onSubmit={handleSubmit}
           onDelete={() => editing && setConfirm(editing)}

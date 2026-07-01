@@ -33,6 +33,7 @@ export async function PUT(
   if (b.id_cargo      !== undefined) patch.id_cargo      = String(b.id_cargo);
   if (b.id_setor      !== undefined) patch.id_setor      = String(b.id_setor);
   if (b.id_unidade    !== undefined) patch.id_unidade    = String(b.id_unidade);
+  // parent_node_id é tratado separadamente para o org node — não vai para /funcionarios
   if (b.estado        !== undefined) patch.estado        = b.estado ? String(b.estado).toUpperCase() : null;
   if (b.cpf           !== undefined) patch.cpf           = b.cpf ? String(b.cpf).replace(/\D/g, '') : null;
   if (b.cep !== undefined) {
@@ -57,6 +58,11 @@ export async function PUT(
 
   try {
     const data = await apiPut(`/funcionarios/${id}`, patch);
+
+    // Se o usuário escolheu explicitamente "reporta a", aplica no nó do organograma.
+    if (b.parent_node_id && typeof b.parent_node_id === 'string') {
+      apiPut(`/organograma_nodes/${id}`, { parent_id: b.parent_node_id }).catch(() => {/* best-effort */});
+    }
 
     // Recomputa hierarquia automática do(s) setor(es) afetado(s)
     if (sectorChanged || cargoChanged) {

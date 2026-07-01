@@ -45,6 +45,20 @@ export async function PUT(
     return NextResponse.json({ error: 'Um setor não pode ser pai de si mesmo.' }, { status: 422 });
   }
 
+  // Setor reparentado: recalcula nivel = nível do novo pai + 1 (raiz = 2).
+  // Sem isso o setor fica "preso" no nivel antigo e some/aparece no lugar errado.
+  if (b.parent_id !== undefined) {
+    if (b.parent_id) {
+      try {
+        const setores = await fetchAllPages<{ id: string; nivel: number | null }>('/setores', 'setores');
+        const parent = setores.find(s => s.id === String(b.parent_id));
+        patch.nivel = (parent?.nivel ?? 2) + 1;
+      } catch { patch.nivel = 3; }
+    } else {
+      patch.nivel = 2;
+    }
+  }
+
   try {
     const data = await apiPut(`/setores/${id}`, patch);
 

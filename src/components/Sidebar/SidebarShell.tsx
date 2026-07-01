@@ -79,19 +79,9 @@ export default function SidebarShell({ isAdmin, userEmail, children }: Props) {
 
   if (!showSidebar) return <FsContext.Provider value={fsMode}>{children}</FsContext.Provider>;
 
-  // Modo TV: sidebar completamente oculta, conteúdo fullscreen sem controles
-  if (fsMode === 'tv') {
-    return (
-      <FsContext.Provider value={fsMode}>
-      <div className={styles.shell}>
-        <div className={styles.content}>{children}</div>
-      </div>
-      </FsContext.Provider>
-    );
-  }
-
-  // Modo limpo: sidebar flutuante visível sobre o conteúdo
-  if (fsMode === 'clean') {
+  // Modo TV ou modo limpo: sidebar flutuante visível sobre o conteúdo (apenas
+  // o destaque do botão "Modo TV" e o que o OrgChart exibe mudam entre eles)
+  if (fsMode === 'tv' || fsMode === 'clean') {
     return (
       <FsContext.Provider value={fsMode}>
       <div className={styles.shell}>
@@ -99,7 +89,7 @@ export default function SidebarShell({ isAdmin, userEmail, children }: Props) {
           isAdmin={isAdmin}
           userEmail={userEmail}
           floating={true}
-          isTvFs={false}
+          isTvFs={fsMode === 'tv'}
           isAnyFs={true}
           onTvFs={enterTvFs}
           onCleanFs={enterCleanFs}
