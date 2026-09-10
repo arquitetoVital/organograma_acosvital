@@ -50,11 +50,12 @@ interface ViewBox {
 
 const OVERVIEW_VB: ViewBox = { x: -540, y: -540, w: 1080, h: 1080 };
 const SECTOR_VB: ViewBox = { x: -1100, y: -1100, w: 2200, h: 2200 };
-const MIN_W_OV = 300;
+const MIN_W_OV = 150;
 const MAX_W_OV = 1500;
 // Reduzido de 400: cargos nos anéis mais externos (nível 11/12) têm o menor
 // raio de nó (ver SECTOR_NODE_RADIUS em radialLayout.ts) — sem isso, dava pra
-// chegar perto o bastante pros cards do centro mas não pros da borda.
+// chegar perto o bastante pros cards do centro mas não pros da borda. Já é
+// mais permissivo que o 200 do fix de zoom vindo de main (feat/allow-more-zoom).
 const MIN_W_SC = 150;
 const MAX_W_SC = 6000; // ring 8 radius=1590 → full diameter ~3400; allow zooming out further
 const CULL_MARGIN = 120;
@@ -220,7 +221,16 @@ export default function OrgChart({
     // Supabase importa setores com prefixo 'sec-'; a API externa usa o UUID puro.
     // Normaliza para o UUID canônico para que getSubtree encontre os filhos certos.
     const canonId = id.startsWith("sec-") ? id.slice(4) : id;
-    setSectorStack((prev) => [...prev, canonId]);
+    setSectorStack((prev) => {
+      // Sem isso, apertar repetidamente o card do setor/sub-setor JÁ aberto
+      // (inclusive o card central, que só desativa o onClick React — o
+      // mecanismo real de abertura é via data-sector-id no pointerdown/up,
+      // que o card central também tem) empilha o mesmo id de novo a cada
+      // toque. "Voltar" só desempilha 1 nível por vez, então a tela parece
+      // "entrar em camadas infinitamente" sem nunca sair do lugar.
+      if (prev.length > 0 && prev[prev.length - 1] === canonId) return prev;
+      return [...prev, canonId];
+    });
   }, []);
 
   const goBack = useCallback(() => {
